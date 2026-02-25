@@ -208,3 +208,6 @@ __marimo__/
 
 # Application logs
 logs/
+
+# Application data (JSON storage)
+data/

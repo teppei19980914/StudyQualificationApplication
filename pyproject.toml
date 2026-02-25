@@ -16,12 +16,15 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-dependencies = []
+dependencies = [
+    "PySide6>=6.7.0",
+]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
+    "pytest-qt>=4.4.0",
     "mypy>=1.8.0",
     "ruff>=0.4.0",
     "pre-commit>=3.6.0",
@@ -60,14 +63,21 @@ select = [
     "RUF",    # Ruff-specific rules
 ]
 ignore = [
-    "E501",   # line too long (handled by formatter)
+    "E501",    # line too long (handled by formatter)
     "PLR0913", # too many arguments
+    "PLR0915", # too many statements
     "PLR2004", # magic value comparison
+    "RUF001",  # ambiguous unicode character (Japanese)
+    "RUF002",  # ambiguous unicode character in docstring (Japanese)
+    "RUF003",  # ambiguous unicode character in comment (Japanese)
+    "TC001",   # move import into TYPE_CHECKING block (runtime imports needed)
+    "TC003",   # move stdlib import into TYPE_CHECKING block
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
-    "ARG",    # Unused arguments are common in tests (fixtures)
+    "ARG",     # Unused arguments are common in tests (fixtures)
+    "PLC0415", # Non-top-level imports are common in tests
     "PLR2004", # Magic values are acceptable in tests
 ]
 
@@ -106,6 +116,10 @@ show_column_numbers = true
 module = ["tests.*"]
 disallow_untyped_defs = false
 
+[[tool.mypy.overrides]]
+module = ["PySide6.*"]
+ignore_missing_imports = true
+
 # =============================================================================
 # Pytest - テスト
 # =============================================================================
@@ -123,6 +137,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
 ]
+qt_api = "pyside6"
 
 # =============================================================================
 # Coverage - カバレッジ
