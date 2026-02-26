@@ -44,6 +44,27 @@ class TestMainWindow:
     def test_has_pages(self, qtbot, tmp_path: Path):
         window = MainWindow(data_dir=tmp_path)
         qtbot.addWidget(window)
+        assert window._dashboard_page is not None
         assert window._goal_page is not None
         assert window._gantt_page is not None
-        assert window._stack.count() == 2
+        assert window._book_page is not None
+        assert window._stats_page is not None
+        assert window._stack.count() == 5
+
+    def test_book_page_refresh_on_switch(self, qtbot, tmp_path: Path):
+        window = MainWindow(data_dir=tmp_path)
+        qtbot.addWidget(window)
+        window._on_page_changed(3)
+        assert window._stack.currentIndex() == 3
+
+    def test_stats_page_refresh_on_switch(self, qtbot, tmp_path: Path):
+        window = MainWindow(data_dir=tmp_path)
+        qtbot.addWidget(window)
+        window._on_page_changed(4)
+        assert window._stack.currentIndex() == 4
+
+    def test_dashboard_page_refresh_on_switch(self, qtbot, tmp_path: Path):
+        window = MainWindow(data_dir=tmp_path)
+        qtbot.addWidget(window)
+        window._on_page_changed(0)
+        assert window._stack.currentIndex() == 0

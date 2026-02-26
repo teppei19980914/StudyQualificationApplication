@@ -42,6 +42,7 @@ class Task:
     status: TaskStatus = TaskStatus.NOT_STARTED
     progress: int = 0
     memo: str = ""
+    book_id: str = ""
     order: int = 0
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -83,6 +84,7 @@ class Task:
             "status": self.status.value,
             "progress": self.progress,
             "memo": self.memo,
+            "book_id": self.book_id,
             "order": self.order,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -107,6 +109,7 @@ class Task:
             status=TaskStatus(str(data["status"])),
             progress=int(data["progress"]),
             memo=str(data.get("memo", "")),
+            book_id=str(data.get("book_id", "")),
             order=int(data.get("order", 0)),
             created_at=datetime.fromisoformat(str(data["created_at"])),
             updated_at=datetime.fromisoformat(str(data["updated_at"])),

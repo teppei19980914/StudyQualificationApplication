@@ -15,11 +15,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from study_python.gui.dialogs.study_log_dialog import StudyLogDialog
 from study_python.gui.dialogs.task_dialog import TaskDialog
 from study_python.gui.theme.theme_manager import ThemeManager
 from study_python.gui.widgets.gantt_chart import GanttChart
+from study_python.gui.widgets.study_timer import StudyTimerWidget
 from study_python.models.task import TaskStatus
+from study_python.services.book_service import BookService
 from study_python.services.goal_service import GoalService
+from study_python.services.study_log_service import StudyLogService
 from study_python.services.task_service import TaskService
 
 
@@ -34,6 +38,8 @@ class GanttPage(QWidget):
         goal_service: GoalService,
         task_service: TaskService,
         theme_manager: ThemeManager,
+        study_log_service: StudyLogService | None = None,
+        book_service: BookService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """GanttPageを初期化する.
@@ -42,12 +48,16 @@ class GanttPage(QWidget):
             goal_service: GoalService.
             task_service: TaskService.
             theme_manager: テーママネージャ.
+            study_log_service: 学習ログサービス.
+            book_service: 書籍サービス.
             parent: 親ウィジェット.
         """
         super().__init__(parent)
         self._goal_service = goal_service
         self._task_service = task_service
         self._theme_manager = theme_manager
+        self._study_log_service = study_log_service
+        self._book_service = book_service
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -79,12 +89,23 @@ class GanttPage(QWidget):
         self._add_task_btn.clicked.connect(self._on_add_task)
         header_layout.addWidget(self._add_task_btn)
 
+        # 学習記録ボタン
+        self._record_btn = QPushButton("\U0001f4dd \u5b66\u7fd2\u8a18\u9332")
+        self._record_btn.setFixedHeight(40)
+        self._record_btn.clicked.connect(self._on_record_study)
+        header_layout.addWidget(self._record_btn)
+
         layout.addLayout(header_layout)
+
+        # タイマー
+        self._timer_widget = StudyTimerWidget()
+        self._timer_widget.timer_stopped.connect(self._on_timer_stopped)
+        layout.addWidget(self._timer_widget)
 
         # 説明テキスト
         desc = QLabel(
             "学習計画をタスクに分解し、ガントチャートで進捗を管理しましょう。"
-            "バーをクリックするとタスクを編集できます。"
+            "バーをクリックするとタスクを編集・タイマー計測できます。"
         )
         desc.setObjectName("muted_text")
         desc.setWordWrap(True)
@@ -154,7 +175,8 @@ class GanttPage(QWidget):
             QMessageBox.information(self, "情報", "まず目標を登録してください。")
             return
 
-        dialog = TaskDialog(self, goal_id=goal_id)
+        books = self._book_service.get_all_books() if self._book_service else []
+        dialog = TaskDialog(self, goal_id=goal_id, books=books)
         if dialog.exec() == TaskDialog.DialogCode.Accepted:
             values = dialog.get_values()
             try:
@@ -164,6 +186,7 @@ class GanttPage(QWidget):
                     start_date=date.fromisoformat(str(values["start_date"])),
                     end_date=date.fromisoformat(str(values["end_date"])),
                     memo=str(values.get("memo", "")),
+                    book_id=str(values.get("book_id", "")),
                 )
                 self._refresh_chart()
             except ValueError as e:
@@ -186,7 +209,11 @@ class GanttPage(QWidget):
         if task is None:
             return
 
-        dialog = TaskDialog(self, task=task)
+        # タイマーの対象タスクを設定
+        self._timer_widget.set_task(task.id, task.title)
+
+        books = self._book_service.get_all_books() if self._book_service else []
+        dialog = TaskDialog(self, task=task, books=books)
         if dialog.exec() == TaskDialog.DialogCode.Accepted:
             values = dialog.get_values()
             try:
@@ -198,10 +225,62 @@ class GanttPage(QWidget):
                     status=TaskStatus(str(values["status"])),
                     progress=int(values["progress"]),
                     memo=str(values.get("memo", "")),
+                    book_id=str(values.get("book_id", "")),
                 )
                 self._refresh_chart()
             except ValueError as e:
                 QMessageBox.warning(self, "エラー", str(e))
+
+    def _on_record_study(self) -> None:
+        """学習記録ボタンハンドラ."""
+        goal_id = self._goal_combo.currentData()
+        if not goal_id:
+            QMessageBox.information(self, "情報", "まず目標を登録してください。")
+            return
+
+        tasks = self._task_service.get_tasks_for_goal(goal_id)
+        if not tasks:
+            QMessageBox.information(self, "情報", "まずタスクを追加してください。")
+            return
+
+        preselected = self._timer_widget.current_task_id or None
+        dialog = StudyLogDialog(
+            tasks=tasks, parent=self, preselected_task_id=preselected
+        )
+        if dialog.exec() == StudyLogDialog.DialogCode.Accepted:
+            values = dialog.get_values()
+            if self._study_log_service:
+                try:
+                    self._study_log_service.add_study_log(
+                        task_id=str(values["task_id"]),
+                        study_date=date.fromisoformat(str(values["study_date"])),
+                        duration_minutes=int(values["duration_minutes"]),
+                        memo=str(values.get("memo", "")),
+                    )
+                    logger.info("Study log recorded via dialog")
+                except ValueError as e:
+                    QMessageBox.warning(self, "エラー", str(e))
+
+    def _on_timer_stopped(self, task_id: str, duration_minutes: int) -> None:
+        """タイマー停止ハンドラ.
+
+        Args:
+            task_id: タスクID.
+            duration_minutes: 経過分数.
+        """
+        if self._study_log_service:
+            try:
+                self._study_log_service.add_study_log(
+                    task_id=task_id,
+                    study_date=date.today(),
+                    duration_minutes=duration_minutes,
+                    memo="タイマー計測",
+                )
+                logger.info(
+                    f"Study log recorded via timer: {duration_minutes}min for {task_id}"
+                )
+            except ValueError as e:
+                logger.error(f"Failed to record timer study log: {e}")
 
     def on_theme_changed(self) -> None:
         """テーマ変更通知ハンドラ."""

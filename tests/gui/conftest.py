@@ -7,8 +7,10 @@ import pytest
 from study_python.gui.theme.theme_manager import ThemeManager
 from study_python.repositories.goal_repository import GoalRepository
 from study_python.repositories.json_storage import JsonStorage
+from study_python.repositories.study_log_repository import StudyLogRepository
 from study_python.repositories.task_repository import TaskRepository
 from study_python.services.goal_service import GoalService
+from study_python.services.study_log_service import StudyLogService
 from study_python.services.task_service import TaskService
 
 
@@ -31,3 +33,10 @@ def task_service(tmp_path: Path) -> TaskService:
     storage = JsonStorage(tmp_path / "tasks.json")
     repo = TaskRepository(storage)
     return TaskService(repo)
+
+
+@pytest.fixture
+def study_log_service(tmp_path: Path) -> StudyLogService:
+    storage = JsonStorage(tmp_path / "study_logs.json")
+    repo = StudyLogRepository(storage)
+    return StudyLogService(repo)

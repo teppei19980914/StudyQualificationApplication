@@ -150,6 +150,37 @@ class TestGanttCalculatorMonthBoundaries:
         assert date(2027, 2, 1) in dates
 
 
+class TestGanttCalculatorDayPositions:
+    """get_day_positionsのテスト."""
+
+    def test_returns_all_days(self):
+        """タイムライン内の全日付を返す."""
+        calc = GanttCalculator(pixels_per_day=10.0)
+        timeline = TimelineRange(start_date=date(2026, 3, 1), end_date=date(2026, 3, 5))
+        positions = calc.get_day_positions(timeline)
+        assert len(positions) == 5
+        dates = [d for d, _ in positions]
+        assert dates[0] == date(2026, 3, 1)
+        assert dates[-1] == date(2026, 3, 5)
+
+    def test_x_positions_correct(self):
+        """X座標が正しく計算される."""
+        calc = GanttCalculator(pixels_per_day=10.0)
+        timeline = TimelineRange(start_date=date(2026, 3, 1), end_date=date(2026, 3, 3))
+        positions = calc.get_day_positions(timeline)
+        assert positions[0] == (date(2026, 3, 1), 0.0)
+        assert positions[1] == (date(2026, 3, 2), 10.0)
+        assert positions[2] == (date(2026, 3, 3), 20.0)
+
+    def test_single_day(self):
+        """1日のタイムラインでも動作する."""
+        calc = GanttCalculator(pixels_per_day=30.0)
+        timeline = TimelineRange(start_date=date(2026, 3, 1), end_date=date(2026, 3, 1))
+        positions = calc.get_day_positions(timeline)
+        assert len(positions) == 1
+        assert positions[0] == (date(2026, 3, 1), 0.0)
+
+
 class TestGanttCalculatorSceneDimensions:
     """シーンサイズ計算のテスト."""
 

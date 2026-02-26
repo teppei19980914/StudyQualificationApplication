@@ -53,6 +53,7 @@ class TaskService:
         start_date: date,
         end_date: date,
         memo: str = "",
+        book_id: str = "",
     ) -> Task:
         """新しいTaskを作成する.
 
@@ -62,6 +63,7 @@ class TaskService:
             start_date: 開始日.
             end_date: 終了日.
             memo: メモ.
+            book_id: 関連書籍のID.
 
         Returns:
             作成されたTask.
@@ -80,6 +82,7 @@ class TaskService:
             start_date=start_date,
             end_date=end_date,
             memo=memo,
+            book_id=book_id,
             order=order,
         )
         self.task_repo.add(task)
@@ -95,6 +98,7 @@ class TaskService:
         status: TaskStatus,
         progress: int,
         memo: str = "",
+        book_id: str = "",
     ) -> Task | None:
         """Taskを更新する.
 
@@ -106,6 +110,7 @@ class TaskService:
             status: ステータス.
             progress: 進捗率（0-100）.
             memo: メモ.
+            book_id: 関連書籍のID.
 
         Returns:
             更新されたTask。見つからない場合はNone.
@@ -131,6 +136,7 @@ class TaskService:
         task.status = status
         task.progress = progress
         task.memo = memo
+        task.book_id = book_id
         task.updated_at = datetime.now()
         self.task_repo.update(task)
         logger.info(f"Updated task: {task.title}")

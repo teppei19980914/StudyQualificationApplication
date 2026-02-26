@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QComboBox,
-    QDateEdit,
     QDialog,
     QFormLayout,
     QHBoxLayout,
@@ -18,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from study_python.gui.widgets.japanese_calendar_widget import create_japanese_date_edit
 from study_python.models.goal import Goal, WhenType
 
 
@@ -87,8 +87,7 @@ class GoalDialog(QDialog):
         form.addRow(self._create_label("When (タイプ)"), self._when_type_combo)
 
         # When Date
-        self._when_date_input = QDateEdit()
-        self._when_date_input.setCalendarPopup(True)
+        self._when_date_input = create_japanese_date_edit()
         self._when_date_input.setDate(QDate.currentDate().addMonths(3))
         self._when_date_input.setDisplayFormat("yyyy/MM/dd")
         form.addRow(self._create_label("When (いつまでに)"), self._when_date_input)

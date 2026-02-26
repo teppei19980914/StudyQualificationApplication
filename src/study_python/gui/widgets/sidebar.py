@@ -70,8 +70,11 @@ class Sidebar(QWidget):
         self._layout.addWidget(title)
 
         self._nav_pages: list[tuple[str, str]] = [
+            ("\U0001f3e0", "\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9"),
             ("\U0001f3af", "3W1H \u76ee\u6a19"),
             ("\U0001f4ca", "\u30ac\u30f3\u30c8\u30c1\u30e3\u30fc\u30c8"),
+            ("\U0001f4da", "\u66f8\u7c4d"),
+            ("\U0001f4c8", "\u7d71\u8a08"),
         ]
         for i, (icon, label) in enumerate(self._nav_pages):
             btn = SidebarButton(icon, label)

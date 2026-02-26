@@ -27,7 +27,7 @@ class TestSidebar:
     def test_has_navigation_buttons(self, qtbot):
         sidebar = Sidebar()
         qtbot.addWidget(sidebar)
-        assert len(sidebar._buttons) == 2
+        assert len(sidebar._buttons) == 5
 
     def test_first_button_checked(self, qtbot):
         sidebar = Sidebar()

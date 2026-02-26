@@ -226,21 +226,34 @@ class GanttChart(QGraphicsView):
             colors: テーマカラーパレット.
         """
         calc = self._calculator
-        grid_pen = QPen(QColor(colors.get("border", "#45475A")))
-        grid_pen.setStyle(Qt.PenStyle.DotLine)
-        grid_pen.setWidthF(0.5)
-
         scene_height = calc.calculate_scene_height(task_count)
+        scene_width = calc.calculate_scene_width(timeline)
+
+        row_pen = QPen(QColor(colors.get("border", "#45475A")))
+        row_pen.setStyle(Qt.PenStyle.DotLine)
+        row_pen.setWidthF(0.5)
 
         # 行グリッド
         for i in range(task_count + 1):
             y = calc.header_height + i * calc.row_height
-            self._scene.addLine(0, y, calc.calculate_scene_width(timeline), y, grid_pen)
+            self._scene.addLine(0, y, scene_width, y, row_pen)
 
-        # 月境界の縦線
+        # 日の縦線
+        day_pen = QPen(QColor(colors.get("border", "#45475A")))
+        day_pen.setStyle(Qt.PenStyle.DotLine)
+        day_pen.setWidthF(0.3)
+
+        day_positions = calc.get_day_positions(timeline)
+        for _, x in day_positions:
+            self._scene.addLine(x, calc.header_height, x, scene_height, day_pen)
+
+        # 月境界の縦線（太め）
+        month_pen = QPen(QColor(colors.get("text_muted", "#6C7086")))
+        month_pen.setWidthF(1.0)
+
         boundaries = calc.get_month_boundaries(timeline)
         for _, x in boundaries:
-            self._scene.addLine(x, 0, x, scene_height, grid_pen)
+            self._scene.addLine(x, 0, x, scene_height, month_pen)
 
     def _draw_header(self, timeline: TimelineRange, colors: dict[str, str]) -> None:
         """タイムラインヘッダーを描画する.
@@ -251,6 +264,7 @@ class GanttChart(QGraphicsView):
         """
         calc = self._calculator
         scene_width = calc.calculate_scene_width(timeline)
+        separator_y = 38.0
 
         # ヘッダー背景
         header_bg = QColor(colors.get("bg_secondary", "#181825"))
@@ -263,18 +277,34 @@ class GanttChart(QGraphicsView):
             QBrush(header_bg),
         )
 
-        # 月ラベル
+        # 月ラベル（上段）
         boundaries = calc.get_month_boundaries(timeline)
         text_color = QColor(colors.get("text_primary", "#CDD6F4"))
-        font = QFont("Segoe UI", 10)
-        font.setWeight(QFont.Weight.DemiBold)
+        month_font = QFont("Segoe UI", 10)
+        month_font.setWeight(QFont.Weight.DemiBold)
 
         for month_date, x in boundaries:
             label = month_date.strftime("%Y/%m")
             text_item = self._scene.addText(label)
             text_item.setDefaultTextColor(text_color)
-            text_item.setFont(font)
-            text_item.setPos(x + 4, 15)
+            text_item.setFont(month_font)
+            text_item.setPos(x + 4, 6)
+
+        # 区切り線
+        sep_pen = QPen(QColor(colors.get("border", "#45475A")))
+        sep_pen.setWidthF(0.5)
+        self._scene.addLine(0, separator_y, scene_width, separator_y, sep_pen)
+
+        # 日ラベル（下段）
+        day_positions = calc.get_day_positions(timeline)
+        day_text_color = QColor(colors.get("text_muted", "#6C7086"))
+        day_font = QFont("Segoe UI", 7)
+
+        for day_date, x in day_positions:
+            text_item = self._scene.addText(str(day_date.day))
+            text_item.setDefaultTextColor(day_text_color)
+            text_item.setFont(day_font)
+            text_item.setPos(x + 8, separator_y + 2)
 
     def _draw_today_line(
         self,

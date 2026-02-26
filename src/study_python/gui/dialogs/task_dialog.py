@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QComboBox,
-    QDateEdit,
     QDialog,
     QFormLayout,
     QHBoxLayout,
@@ -20,6 +19,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from study_python.gui.widgets.japanese_calendar_widget import create_japanese_date_edit
+from study_python.models.book import Book
 from study_python.models.task import Task, TaskStatus
 
 
@@ -35,6 +36,7 @@ class TaskDialog(QDialog):
         parent: QWidget | None = None,
         task: Task | None = None,
         goal_id: str = "",
+        books: list[Book] | None = None,
     ) -> None:
         """TaskDialogを初期化する.
 
@@ -42,10 +44,12 @@ class TaskDialog(QDialog):
             parent: 親ウィジェット.
             task: 編集対象のTask.
             goal_id: 新規作成時のGoal ID.
+            books: 選択可能な書籍リスト.
         """
         super().__init__(parent)
         self.task = task
         self._goal_id = goal_id
+        self._books = books or []
         self._setup_ui()
         if task:
             self._populate_from_task(task)
@@ -75,15 +79,13 @@ class TaskDialog(QDialog):
         form.addRow(self._create_label("タスク名"), self._title_input)
 
         # 開始日
-        self._start_date_input = QDateEdit()
-        self._start_date_input.setCalendarPopup(True)
+        self._start_date_input = create_japanese_date_edit()
         self._start_date_input.setDate(QDate.currentDate())
         self._start_date_input.setDisplayFormat("yyyy/MM/dd")
         form.addRow(self._create_label("開始日"), self._start_date_input)
 
         # 終了日
-        self._end_date_input = QDateEdit()
-        self._end_date_input.setCalendarPopup(True)
+        self._end_date_input = create_japanese_date_edit()
         self._end_date_input.setDate(QDate.currentDate().addDays(14))
         self._end_date_input.setDisplayFormat("yyyy/MM/dd")
         form.addRow(self._create_label("終了日"), self._end_date_input)
@@ -121,6 +123,13 @@ class TaskDialog(QDialog):
         self._memo_input.setPlaceholderText("メモ（任意）")
         self._memo_input.setMaximumHeight(80)
         form.addRow(self._create_label("メモ"), self._memo_input)
+
+        # 関連書籍
+        self._book_combo = QComboBox()
+        self._book_combo.addItem("\u306a\u3057", "")
+        for book in self._books:
+            self._book_combo.addItem(book.title, book.id)
+        form.addRow(self._create_label("\u95a2\u9023\u66f8\u7c4d"), self._book_combo)
 
         layout.addLayout(form)
 
@@ -174,6 +183,13 @@ class TaskDialog(QDialog):
         self._progress_slider.setValue(task.progress)
         self._memo_input.setPlainText(task.memo)
 
+        # 書籍選択の復元
+        if task.book_id:
+            for i in range(self._book_combo.count()):
+                if self._book_combo.itemData(i) == task.book_id:
+                    self._book_combo.setCurrentIndex(i)
+                    break
+
     def _on_save(self) -> None:
         """保存ボタンのハンドラ."""
         if not self._title_input.text().strip():
@@ -206,4 +222,5 @@ class TaskDialog(QDialog):
             "status": str(self._status_combo.currentData()),
             "progress": self._progress_spin.value(),
             "memo": self._memo_input.toPlainText().strip(),
+            "book_id": str(self._book_combo.currentData()),
         }

@@ -24,6 +24,7 @@ class TestTaskCreation:
         assert task.status == TaskStatus.NOT_STARTED
         assert task.progress == 0
         assert task.memo == ""
+        assert task.book_id == ""
         assert task.order == 0
         assert task.id  # UUIDが生成される
 
@@ -37,11 +38,13 @@ class TestTaskCreation:
             status=TaskStatus.IN_PROGRESS,
             progress=50,
             memo="半分完了",
+            book_id="book-1",
             order=1,
         )
         assert task.status == TaskStatus.IN_PROGRESS
         assert task.progress == 50
         assert task.memo == "半分完了"
+        assert task.book_id == "book-1"
         assert task.order == 1
 
     def test_create_task_same_start_end_date(self):
@@ -156,6 +159,7 @@ class TestTaskSerialization:
         assert d["status"] == "in_progress"
         assert d["progress"] == 30
         assert d["memo"] == "進行中"
+        assert d["book_id"] == ""
         assert d["order"] == 2
 
     def test_from_dict(self):
@@ -178,6 +182,36 @@ class TestTaskSerialization:
         assert task.start_date == date(2026, 3, 1)
         assert task.status == TaskStatus.COMPLETED
         assert task.progress == 100
+
+    def test_from_dict_missing_book_id(self):
+        data = {
+            "id": "task-2",
+            "goal_id": "goal-1",
+            "title": "旧データ",
+            "start_date": "2026-03-01",
+            "end_date": "2026-03-15",
+            "status": "not_started",
+            "progress": 0,
+            "created_at": "2026-02-25T10:00:00",
+            "updated_at": "2026-02-25T10:00:00",
+        }
+        task = Task.from_dict(data)
+        assert task.book_id == ""
+
+    def test_to_dict_with_book_id(self):
+        now = datetime(2026, 2, 25, 10, 0, 0)
+        task = Task(
+            id="task-3",
+            goal_id="goal-1",
+            title="書籍タスク",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            book_id="book-1",
+            created_at=now,
+            updated_at=now,
+        )
+        d = task.to_dict()
+        assert d["book_id"] == "book-1"
 
     def test_roundtrip_serialization(self):
         original = Task(

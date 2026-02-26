@@ -59,7 +59,7 @@ class GanttCalculator:
         self,
         pixels_per_day: float = 30.0,
         row_height: int = 40,
-        header_height: int = 50,
+        header_height: int = 70,
         bar_height: int = 24,
         bar_margin: int = 8,
     ) -> None:
@@ -190,6 +190,23 @@ class GanttCalculator:
             else:
                 current = current.replace(month=current.month + 1)
         return boundaries
+
+    def get_day_positions(self, timeline: TimelineRange) -> list[tuple[date, float]]:
+        """タイムライン内の各日付とX座標を取得する.
+
+        Args:
+            timeline: タイムライン範囲.
+
+        Returns:
+            (日付, X座標)のリスト.
+        """
+        positions: list[tuple[date, float]] = []
+        current = timeline.start_date
+        while current <= timeline.end_date:
+            x = self.date_to_x(current, timeline)
+            positions.append((current, x))
+            current += timedelta(days=1)
+        return positions
 
     def calculate_scene_width(self, timeline: TimelineRange) -> float:
         """シーン全体の幅を計算する.

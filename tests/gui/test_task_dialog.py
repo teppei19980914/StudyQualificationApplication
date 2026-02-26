@@ -5,6 +5,7 @@ from datetime import date
 from PySide6.QtCore import QDate
 
 from study_python.gui.dialogs.task_dialog import TaskDialog
+from study_python.models.book import Book
 from study_python.models.task import Task, TaskStatus
 
 
@@ -134,3 +135,56 @@ class TestTaskDialogValidation:
         dialog._end_date_input.setDate(QDate(2026, 3, 15))
         dialog._on_save()
         assert dialog.result() == TaskDialog.DialogCode.Accepted
+
+
+class TestTaskDialogBookSelection:
+    """書籍選択のテスト."""
+
+    def test_no_books_shows_only_none(self, qtbot):
+        dialog = TaskDialog()
+        qtbot.addWidget(dialog)
+        assert dialog._book_combo.count() == 1
+        assert dialog._book_combo.currentData() == ""
+
+    def test_books_list_populated(self, qtbot):
+        books = [
+            Book(title="Python入門", id="book-1"),
+            Book(title="統計学基礎", id="book-2"),
+        ]
+        dialog = TaskDialog(books=books)
+        qtbot.addWidget(dialog)
+        assert dialog._book_combo.count() == 3  # なし + 2冊
+
+    def test_get_values_includes_book_id(self, qtbot):
+        books = [Book(title="Python入門", id="book-1")]
+        dialog = TaskDialog(books=books)
+        qtbot.addWidget(dialog)
+        dialog._title_input.setText("test")
+        dialog._book_combo.setCurrentIndex(1)  # Python入門
+
+        values = dialog.get_values()
+        assert values["book_id"] == "book-1"
+
+    def test_default_book_is_none(self, qtbot):
+        books = [Book(title="Python入門", id="book-1")]
+        dialog = TaskDialog(books=books)
+        qtbot.addWidget(dialog)
+
+        values = dialog.get_values()
+        assert values["book_id"] == ""
+
+    def test_edit_restores_book_selection(self, qtbot):
+        books = [
+            Book(title="Python入門", id="book-1"),
+            Book(title="統計学基礎", id="book-2"),
+        ]
+        task = Task(
+            goal_id="goal-1",
+            title="テスト",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            book_id="book-2",
+        )
+        dialog = TaskDialog(task=task, books=books)
+        qtbot.addWidget(dialog)
+        assert dialog._book_combo.currentData() == "book-2"
