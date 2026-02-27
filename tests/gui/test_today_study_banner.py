@@ -21,7 +21,7 @@ class TestTodayStudyBanner:
         banner = TodayStudyBanner(theme_manager)
         qtbot.addWidget(banner)
         assert banner is not None
-        assert banner.height() == 60
+        assert banner.minimumHeight() == 60
 
     def test_initial_data_is_none(self, qtbot, theme_manager):
         banner = TodayStudyBanner(theme_manager)

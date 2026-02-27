@@ -33,12 +33,14 @@ class StudyLogEntry:
         task_name: タスク名（表示用）.
         duration_minutes: 学習時間（分）.
         memo: メモ.
+        task_status: タスクステータス（表示用）.
     """
 
     study_date: date
     task_name: str
     duration_minutes: int
     memo: str
+    task_status: str = ""
 
 
 class StudyLogTable(QWidget):
@@ -51,7 +53,7 @@ class StudyLogTable(QWidget):
         _table: テーブルウィジェット.
     """
 
-    _HEADERS: ClassVar[list[str]] = ["日付", "タスク", "学習時間", "メモ"]
+    _HEADERS: ClassVar[list[str]] = ["日付", "タスク", "ステータス", "学習時間", "メモ"]
 
     def __init__(
         self,
@@ -80,14 +82,16 @@ class StudyLogTable(QWidget):
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
-        self._table.setMaximumHeight(300)
+        self._table.setMinimumHeight(150)
+        self._table.setMaximumHeight(400)
 
         # ヘッダーの伸縮設定
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
 
         self._empty_label = QLabel("学習ログがありません")
         self._empty_label.setObjectName("muted_text")
@@ -126,17 +130,24 @@ class StudyLogTable(QWidget):
             task_item = QTableWidgetItem(entry.task_name)
             self._table.setItem(row, 1, task_item)
 
+            # ステータス
+            status_item = QTableWidgetItem(entry.task_status)
+            status_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+            )
+            self._table.setItem(row, 2, status_item)
+
             # 学習時間
             time_text = self._format_duration(entry.duration_minutes)
             time_item = QTableWidgetItem(time_text)
             time_item.setTextAlignment(
                 Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
             )
-            self._table.setItem(row, 2, time_item)
+            self._table.setItem(row, 3, time_item)
 
             # メモ
             memo_item = QTableWidgetItem(entry.memo)
-            self._table.setItem(row, 3, memo_item)
+            self._table.setItem(row, 4, memo_item)
 
         logger.debug(f"Study log table updated: {len(entries)} entries")
 

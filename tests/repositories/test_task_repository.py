@@ -62,6 +62,27 @@ class TestTaskRepositoryGetByGoalId:
         assert tasks[1].title == "後"
 
 
+class TestTaskRepositoryGetByBookId:
+    """get_by_book_idメソッドのテスト."""
+
+    def test_get_by_book_id(self, repo):
+        repo.add(_make_task(book_id="book-1", title="タスク1"))
+        repo.add(_make_task(book_id="book-2", title="タスク2"))
+        repo.add(_make_task(book_id="book-1", title="タスク3"))
+        tasks = repo.get_by_book_id("book-1")
+        assert len(tasks) == 2
+
+    def test_get_by_book_id_empty(self, repo):
+        assert repo.get_by_book_id("nonexistent") == []
+
+    def test_get_by_book_id_sorted_by_order(self, repo):
+        repo.add(_make_task(book_id="book-1", title="後", order=2))
+        repo.add(_make_task(book_id="book-1", title="先", order=1))
+        tasks = repo.get_by_book_id("book-1")
+        assert tasks[0].title == "先"
+        assert tasks[1].title == "後"
+
+
 class TestTaskRepositoryGetById:
     """get_by_idメソッドのテスト."""
 

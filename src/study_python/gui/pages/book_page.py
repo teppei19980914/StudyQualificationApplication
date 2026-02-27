@@ -166,13 +166,14 @@ class BookPage(QWidget):
         # 書籍名
         title_label = QLabel(f"\U0001f4d6 {book.title}")
         title_label.setStyleSheet("font-size: 13px;")
+        title_label.setMinimumWidth(0)
         row_layout.addWidget(title_label, 1)
 
         # ステータスバッジ
         status_text = _STATUS_LABELS.get(book.status, book.status.value)
         status_label = QLabel(status_text)
         status_label.setStyleSheet(self._get_status_style(book.status))
-        status_label.setFixedWidth(60)
+        status_label.setMinimumWidth(50)
         status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         row_layout.addWidget(status_label)
 
@@ -188,7 +189,7 @@ class BookPage(QWidget):
         if book.status == BookStatus.UNREAD:
             reading_btn = QPushButton("読書中")
             reading_btn.setObjectName("secondary_button")
-            reading_btn.setFixedSize(64, 28)
+            reading_btn.setFixedHeight(28)
             reading_btn.clicked.connect(
                 lambda _checked=False, bid=book.id: self._on_change_status(
                     bid, BookStatus.READING
@@ -198,7 +199,7 @@ class BookPage(QWidget):
 
         if book.status != BookStatus.COMPLETED:
             complete_btn = QPushButton("読了")
-            complete_btn.setFixedSize(48, 28)
+            complete_btn.setFixedHeight(28)
             complete_btn.clicked.connect(
                 lambda _checked=False, bid=book.id: self._on_complete_book(bid)
             )
@@ -206,7 +207,7 @@ class BookPage(QWidget):
 
         delete_btn = QPushButton("\U0001f5d1")
         delete_btn.setObjectName("danger_button")
-        delete_btn.setFixedSize(28, 28)
+        delete_btn.setFixedHeight(28)
         delete_btn.setToolTip("削除")
         delete_btn.clicked.connect(
             lambda _checked=False, bid=book.id: self._on_delete_book(bid)

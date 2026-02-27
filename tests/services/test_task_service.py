@@ -101,7 +101,6 @@ class TestTaskServiceUpdate:
             title="updated",
             start_date=date(2026, 3, 5),
             end_date=date(2026, 3, 20),
-            status=TaskStatus.IN_PROGRESS,
             progress=50,
             memo="更新メモ",
         )
@@ -110,13 +109,48 @@ class TestTaskServiceUpdate:
         assert updated.progress == 50
         assert updated.status == TaskStatus.IN_PROGRESS
 
+    def test_update_task_auto_status_not_started(self, service):
+        """進捗0%でステータスが未着手になる."""
+        task = service.create_task(
+            goal_id="goal-1",
+            title="test",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+        )
+        updated = service.update_task(
+            task_id=task.id,
+            title="test",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            progress=0,
+        )
+        assert updated is not None
+        assert updated.status == TaskStatus.NOT_STARTED
+
+    def test_update_task_auto_status_completed(self, service):
+        """進捗100%でステータスが完了になる."""
+        task = service.create_task(
+            goal_id="goal-1",
+            title="test",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+        )
+        updated = service.update_task(
+            task_id=task.id,
+            title="test",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            progress=100,
+        )
+        assert updated is not None
+        assert updated.status == TaskStatus.COMPLETED
+
     def test_update_nonexistent_returns_none(self, service):
         result = service.update_task(
             task_id="nonexistent",
             title="test",
             start_date=date(2026, 3, 1),
             end_date=date(2026, 3, 15),
-            status=TaskStatus.NOT_STARTED,
             progress=0,
         )
         assert result is None
@@ -134,7 +168,6 @@ class TestTaskServiceUpdate:
                 title="",
                 start_date=date(2026, 3, 1),
                 end_date=date(2026, 3, 15),
-                status=TaskStatus.NOT_STARTED,
                 progress=0,
             )
 
@@ -151,7 +184,6 @@ class TestTaskServiceUpdate:
                 title="test",
                 start_date=date(2026, 3, 1),
                 end_date=date(2026, 3, 15),
-                status=TaskStatus.NOT_STARTED,
                 progress=150,
             )
 
@@ -168,7 +200,6 @@ class TestTaskServiceUpdate:
                 title="test",
                 start_date=date(2026, 3, 15),
                 end_date=date(2026, 3, 1),
-                status=TaskStatus.NOT_STARTED,
                 progress=0,
             )
 
@@ -222,6 +253,32 @@ class TestTaskServiceGetTasks:
             end_date=date(2026, 3, 15),
         )
         assert len(service.get_all_tasks()) == 2
+
+
+class TestTaskServiceGetTasksForBook:
+    """get_tasks_for_bookのテスト."""
+
+    def test_get_tasks_for_book(self, service):
+        service.create_task(
+            goal_id="goal-1",
+            title="タスク1",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            book_id="book-1",
+        )
+        service.create_task(
+            goal_id="goal-1",
+            title="タスク2",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            book_id="book-2",
+        )
+        tasks = service.get_tasks_for_book("book-1")
+        assert len(tasks) == 1
+        assert tasks[0].book_id == "book-1"
+
+    def test_get_tasks_for_book_empty(self, service):
+        assert service.get_tasks_for_book("nonexistent") == []
 
 
 class TestTaskServiceUpdateProgress:

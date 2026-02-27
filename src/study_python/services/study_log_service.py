@@ -86,6 +86,7 @@ class StudyLogService:
         study_date: date,
         duration_minutes: int,
         memo: str = "",
+        task_name: str = "",
     ) -> StudyLog:
         """学習ログを追加する.
 
@@ -94,6 +95,7 @@ class StudyLogService:
             study_date: 学習実施日.
             duration_minutes: 学習時間（分）.
             memo: メモ.
+            task_name: タスク名（削除後も表示用に保存）.
 
         Returns:
             作成されたStudyLog.
@@ -106,6 +108,7 @@ class StudyLogService:
             study_date=study_date,
             duration_minutes=duration_minutes,
             memo=memo,
+            task_name=task_name,
         )
         self.study_log_repo.add(study_log)
         logger.info(f"Added study log: {duration_minutes}min for task {task_id}")
@@ -185,6 +188,29 @@ class StudyLogService:
             total_minutes=total_minutes,
             total_study_days=total_study_days,
         )
+
+    def backfill_task_names(self, task_name_map: dict[str, str]) -> int:
+        """task_nameが未設定のログにタスク名をバックフィルする.
+
+        既存ログで task_name が空のものについて、現在のタスク名マップから
+        名前を補完して永続化する。タスク削除後も名前が表示されるようにする。
+
+        Args:
+            task_name_map: {task_id: task_title}のマッピング.
+
+        Returns:
+            更新した件数.
+        """
+        logs = self.study_log_repo.get_all()
+        updated_count = 0
+        for log in logs:
+            if not log.task_name and log.task_id in task_name_map:
+                log.task_name = task_name_map[log.task_id]
+                self.study_log_repo.update(log)
+                updated_count += 1
+        if updated_count > 0:
+            logger.info(f"Backfilled task_name for {updated_count} study logs")
+        return updated_count
 
     def _calculate_task_stats(
         self, task_id: str, logs: list[StudyLog]

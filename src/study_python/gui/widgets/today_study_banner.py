@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 from study_python.gui.theme.theme_manager import ThemeManager
 from study_python.services.motivation_calculator import TodayStudyData
@@ -44,8 +44,9 @@ class TodayStudyBanner(QFrame):
 
     def _setup_ui(self) -> None:
         """UIを構築する."""
-        self.setFixedHeight(60)
+        self.setMinimumHeight(60)
         self.setObjectName("today_study_banner")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 8, 16, 8)

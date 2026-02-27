@@ -9,24 +9,27 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QMenu,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from study_python.gui.pages.stats_page import SummaryCard
 from study_python.gui.theme.theme_manager import ThemeManager
+from study_python.gui.widgets.activity_chart_section import ActivityChartSection
 from study_python.gui.widgets.bookshelf_widget import BookshelfWidget
-from study_python.gui.widgets.daily_activity_chart import DailyActivityChart
+from study_python.gui.widgets.consistency_card import ConsistencyCard
 from study_python.gui.widgets.dashboard_widget_frame import (
     DRAG_MIME_TYPE,
+    PALETTE_DRAG_MIME_TYPE,
     DashboardWidgetFrame,
 )
-from study_python.gui.widgets.milestone_section import MilestoneSection
+from study_python.gui.widgets.milestone_button import MilestoneButton
+from study_python.gui.widgets.personal_record_card import PersonalRecordCard
 from study_python.gui.widgets.today_study_banner import TodayStudyBanner
-from study_python.gui.widgets.weekly_comparison_card import WeeklyComparisonCard
+from study_python.gui.widgets.widget_palette_panel import WidgetPalettePanel
 from study_python.services.book_service import BookService
 from study_python.services.dashboard_layout_service import (
     DashboardLayoutService,
@@ -35,7 +38,10 @@ from study_python.services.dashboard_layout_service import (
 from study_python.services.goal_service import GoalService
 from study_python.services.motivation_calculator import MotivationCalculator
 from study_python.services.study_log_service import StudyLogService
-from study_python.services.study_stats_calculator import StudyStatsCalculator
+from study_python.services.study_stats_calculator import (
+    ActivityPeriodType,
+    StudyStatsCalculator,
+)
 from study_python.services.task_service import TaskService
 
 
@@ -70,7 +76,9 @@ class DashboardGridContainer(QWidget):
         Args:
             event: ドラッグイベント.
         """
-        if event.mimeData().hasFormat(DRAG_MIME_TYPE):
+        if event.mimeData().hasFormat(DRAG_MIME_TYPE) or event.mimeData().hasFormat(
+            PALETTE_DRAG_MIME_TYPE
+        ):
             event.acceptProposedAction()
 
     def dragMoveEvent(self, event) -> None:  # type: ignore[override]  # pragma: no cover
@@ -79,7 +87,9 @@ class DashboardGridContainer(QWidget):
         Args:
             event: ドラッグイベント.
         """
-        if event.mimeData().hasFormat(DRAG_MIME_TYPE):
+        if event.mimeData().hasFormat(DRAG_MIME_TYPE) or event.mimeData().hasFormat(
+            PALETTE_DRAG_MIME_TYPE
+        ):
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:  # type: ignore[override]  # pragma: no cover
@@ -96,6 +106,15 @@ class DashboardGridContainer(QWidget):
                 event.position().toPoint()
             )
             self._dashboard_page._on_drop(from_index, to_index)
+            event.acceptProposedAction()
+        elif event.mimeData().hasFormat(PALETTE_DRAG_MIME_TYPE):
+            widget_type = bytes(event.mimeData().data(PALETTE_DRAG_MIME_TYPE)).decode(
+                "utf-8"
+            )
+            to_index = self._dashboard_page._calculate_drop_index(
+                event.position().toPoint()
+            )
+            self._dashboard_page._on_palette_drop(widget_type, to_index)
             event.acceptProposedAction()
 
 
@@ -166,6 +185,9 @@ class DashboardPage(QWidget):
 
         header_layout.addStretch()
 
+        self._milestone_button = MilestoneButton(self._theme_manager)
+        header_layout.addWidget(self._milestone_button)
+
         self._edit_button = QPushButton("\u270f\ufe0f \u7de8\u96c6")
         self._edit_button.setObjectName("secondary_button")
         self._edit_button.setFixedHeight(36)
@@ -188,6 +210,9 @@ class DashboardPage(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self._grid_container = DashboardGridContainer(self)
+        self._grid_container.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self._grid_layout = QGridLayout(self._grid_container)
         self._grid_layout.setSpacing(12)
         self._grid_layout.setContentsMargins(0, 0, 0, 0)
@@ -196,17 +221,18 @@ class DashboardPage(QWidget):
         self._grid_layout.setColumnStretch(1, 1)
 
         scroll.setWidget(self._grid_container)
-        layout.addWidget(scroll, 1)
 
-        # ウィジェット追加ボタン（編集モード時のみ表示）
-        self._add_widget_button = QPushButton(
-            "\uff0b \u30a6\u30a3\u30b8\u30a7\u30c3\u30c8\u3092\u8ffd\u52a0"
-        )
-        self._add_widget_button.setObjectName("secondary_button")
-        self._add_widget_button.setFixedHeight(40)
-        self._add_widget_button.clicked.connect(self._on_add_widget)
-        self._add_widget_button.setVisible(False)
-        layout.addWidget(self._add_widget_button)
+        # ボディ（スクロールエリア + パレットパネル）
+        body_layout = QHBoxLayout()
+        body_layout.setSpacing(0)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.addWidget(scroll, 1)
+
+        self._palette_panel = WidgetPalettePanel(self._theme_manager)
+        self._palette_panel.setVisible(False)
+        body_layout.addWidget(self._palette_panel)
+
+        layout.addLayout(body_layout, 1)
 
     def _load_layout(self) -> None:
         """レイアウト設定を読み込んでグリッドを構築する."""
@@ -290,10 +316,10 @@ class DashboardPage(QWidget):
             "streak_card": lambda: SummaryCard(
                 "\U0001f525", "0\u65e5", "\u9023\u7d9a\u5b66\u7fd2"
             ),
-            "weekly_comparison": lambda: WeeklyComparisonCard(self._theme_manager),
-            "milestone": lambda: MilestoneSection(self._theme_manager),
+            "personal_record": lambda: PersonalRecordCard(self._theme_manager),
+            "consistency": lambda: ConsistencyCard(self._theme_manager),
             "bookshelf": lambda: BookshelfWidget(self._theme_manager),
-            "daily_chart": lambda: DailyActivityChart(self._theme_manager),
+            "daily_chart": lambda: ActivityChartSection(self._theme_manager),
         }
         factory = factories.get(widget_type)
         if factory is None:
@@ -341,28 +367,34 @@ class DashboardPage(QWidget):
                 f"{len(goals)}\u500b"
             )
 
-        weekly_card = self._active_widgets.get("weekly_comparison")
-        if weekly_card is not None:
-            weekly_data = motivation.calculate_weekly_comparison(all_logs)
-            weekly_card.set_data(weekly_data)  # type: ignore[union-attr]
+        personal_record = self._active_widgets.get("personal_record")
+        if personal_record is not None:
+            record_data = motivation.calculate_personal_records(all_logs)
+            personal_record.set_data(record_data)  # type: ignore[union-attr]
 
-        milestone_section = self._active_widgets.get("milestone")
-        if milestone_section is not None:
-            milestone_data = motivation.calculate_milestones(
-                all_logs, streak_data.current_streak
-            )
-            milestone_section.set_data(milestone_data)  # type: ignore[union-attr]
+        consistency_card = self._active_widgets.get("consistency")
+        if consistency_card is not None:
+            consistency_data = motivation.calculate_consistency(all_logs)
+            consistency_card.set_data(consistency_data)  # type: ignore[union-attr]
+
+        milestone_data = motivation.calculate_milestones(
+            all_logs, streak_data.current_streak
+        )
+        self._milestone_button.set_data(milestone_data)
 
         bookshelf = self._active_widgets.get("bookshelf")
         if bookshelf is not None and self._book_service is not None:
             bookshelf_data = self._book_service.get_bookshelf_data()
             bookshelf.set_data(bookshelf_data)  # type: ignore[union-attr]
 
-        daily_chart = self._active_widgets.get("daily_chart")
-        if daily_chart is not None:
+        chart_section = self._active_widgets.get("daily_chart")
+        if chart_section is not None:
             calculator = StudyStatsCalculator()
-            activity_data = calculator.calculate_daily_activity(all_logs)
-            daily_chart.set_data(activity_data)  # type: ignore[union-attr]
+            all_chart_data = {
+                pt: calculator.calculate_activity(all_logs, pt)
+                for pt in ActivityPeriodType
+            }
+            chart_section.set_all_data(all_chart_data)  # type: ignore[union-attr]
 
         logger.debug("Dashboard refreshed")
 
@@ -381,7 +413,9 @@ class DashboardPage(QWidget):
             self._edit_button.setText("\u270f\ufe0f \u7de8\u96c6")
             self._layout_service.save_layout(self._current_layout)
 
-        self._add_widget_button.setVisible(self._edit_mode)
+        self._palette_panel.setVisible(self._edit_mode)
+        if self._edit_mode:
+            self._refresh_palette()
 
         for frame in self._widget_frames:
             frame.set_edit_mode(self._edit_mode)
@@ -399,6 +433,10 @@ class DashboardPage(QWidget):
         )
         self._rebuild_grid()
         self.refresh()
+        if self._edit_mode:
+            self._refresh_palette()
+            for frame in self._widget_frames:
+                frame.set_edit_mode(True)
 
     def _on_widget_resized(self, index: int) -> None:
         """ウィジェットリサイズハンドラ.
@@ -412,29 +450,33 @@ class DashboardPage(QWidget):
         self._rebuild_grid()
         self.refresh()
 
-    def _on_add_widget(self) -> None:  # pragma: no cover
-        """ウィジェット追加ボタンハンドラ."""
+    def _refresh_palette(self) -> None:
+        """パレットパネルのアイテムを更新する."""
         available = self._layout_service.get_available_widgets(self._current_layout)
-        if not available:
-            return
+        self._palette_panel.update_items(available)
 
-        menu = QMenu(self)
-        for meta in available:
-            action = menu.addAction(f"{meta.icon} {meta.display_name}")
-            action.setData(meta.widget_type)
+    def _on_palette_drop(self, widget_type: str, to_index: int) -> None:
+        """パレットからのドロップハンドラ.
 
-        chosen = menu.exec(
-            self._add_widget_button.mapToGlobal(
-                self._add_widget_button.rect().topLeft()
-            )
+        Args:
+            widget_type: 追加するウィジェットタイプ.
+            to_index: 挿入先インデックス.
+        """
+        self._current_layout = self._layout_service.add_widget(
+            self._current_layout, widget_type
         )
-        if chosen is not None:
-            widget_type = chosen.data()
-            self._current_layout = self._layout_service.add_widget(
-                self._current_layout, widget_type
+        # add_widgetは末尾に追加するので、to_indexに移動
+        from_index = len(self._current_layout) - 1
+        if from_index != to_index and from_index > 0:
+            self._current_layout = self._layout_service.reorder(
+                self._current_layout, from_index, to_index
             )
-            self._rebuild_grid()
-            self.refresh()
+        self._rebuild_grid()
+        self.refresh()
+        if self._edit_mode:
+            self._refresh_palette()
+            for frame in self._widget_frames:
+                frame.set_edit_mode(True)
 
     def _on_drop(self, from_index: int, to_index: int) -> None:
         """ドロップハンドラ.

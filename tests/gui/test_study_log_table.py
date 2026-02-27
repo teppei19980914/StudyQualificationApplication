@@ -28,6 +28,17 @@ class TestStudyLogEntry:
         assert entry.task_name == "Udemy学習"
         assert entry.duration_minutes == 60
         assert entry.memo == "Section 5完了"
+        assert entry.task_status == ""
+
+    def test_create_with_status(self):
+        entry = StudyLogEntry(
+            study_date=date(2026, 2, 26),
+            task_name="Udemy学習",
+            duration_minutes=60,
+            memo="",
+            task_status="実施中",
+        )
+        assert entry.task_status == "実施中"
 
 
 class TestStudyLogTable:
@@ -63,14 +74,17 @@ class TestStudyLogTable:
         qtbot.addWidget(table)
 
         entries = [
-            StudyLogEntry(date(2026, 2, 26), "Udemy", 90, "テストメモ"),
+            StudyLogEntry(
+                date(2026, 2, 26), "Udemy", 90, "テストメモ", task_status="実施中"
+            ),
         ]
         table.set_entries(entries)
 
         assert table._table.item(0, 0).text() == "2026-02-26"
         assert table._table.item(0, 1).text() == "Udemy"
-        assert table._table.item(0, 2).text() == "1h 30min"
-        assert table._table.item(0, 3).text() == "テストメモ"
+        assert table._table.item(0, 2).text() == "実施中"
+        assert table._table.item(0, 3).text() == "1h 30min"
+        assert table._table.item(0, 4).text() == "テストメモ"
 
     def test_set_entries_replaces_previous(self, qtbot, theme_manager):
         table = StudyLogTable(theme_manager)

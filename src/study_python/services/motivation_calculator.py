@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from enum import Enum
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class MilestoneType(Enum):
-    """マイルストーンの種類.
+    """実績の種類（将来の通知機能用）.
 
     Attributes:
         TOTAL_HOURS: 累計学習時間.
@@ -59,10 +60,10 @@ class TodayStudyData:
 
 @dataclass
 class Milestone:
-    """マイルストーン.
+    """実績の閾値達成通知.
 
     Attributes:
-        milestone_type: マイルストーンの種類.
+        milestone_type: 実績の種類.
         value: 達成した閾値.
         label: 表示テキスト.
     """
@@ -74,35 +75,72 @@ class Milestone:
 
 @dataclass
 class MilestoneData:
-    """マイルストーンデータ.
+    """実績データ.
+
+    累計値と閾値達成通知の両方を保持する。
 
     Attributes:
-        achieved: 達成済みマイルストーンのリスト.
-        next_milestone: 次に達成するマイルストーン.
+        total_hours: 累計学習時間（時間）.
+        study_days: 累計学習日数.
+        current_streak: 連続学習日数.
+        achieved: 達成済み閾値通知のリスト.
+        next_milestone: 次に達成する閾値通知.
     """
 
+    total_hours: float = 0.0
+    study_days: int = 0
+    current_streak: int = 0
     achieved: list[Milestone] = field(default_factory=list)
     next_milestone: Milestone | None = None
 
 
 @dataclass
-class WeeklyComparisonData:
-    """週間比較データ.
+class PersonalRecordData:
+    """自己ベスト記録データ.
 
     Attributes:
-        this_week_minutes: 今週の合計学習時間（分）.
-        last_week_minutes: 先週の合計学習時間（分）.
-        difference_minutes: 差分（正=増加, 負=減少）.
-        change_percent: 変化率（先週が0の場合はNone）.
+        best_day_minutes: 1日最大学習時間（分）.
+        best_day_date: その日付.
+        best_week_minutes: 1週間最大学習時間（分）.
+        best_week_start: その週の月曜日.
+        longest_streak: 最長連続学習日数.
+        total_hours: 累計学習時間（時間）.
+        total_study_days: 累計学習日数.
     """
 
-    this_week_minutes: int
-    last_week_minutes: int
-    difference_minutes: int
-    change_percent: float | None
+    best_day_minutes: int
+    best_day_date: date | None
+    best_week_minutes: int
+    best_week_start: date | None
+    longest_streak: int
+    total_hours: float
+    total_study_days: int
 
 
-# マイルストーン閾値定義
+@dataclass
+class ConsistencyData:
+    """学習継続率データ.
+
+    Attributes:
+        this_week_days: 今週の学習日数 (0-7).
+        this_week_total: 今週の経過曜日数 (1-7).
+        this_month_days: 今月の学習日数.
+        this_month_total: 今月の経過日数.
+        overall_rate: 全期間の継続率 (0.0-1.0).
+        overall_study_days: 全期間の学習日数.
+        overall_total_days: 初学習日からの経過日数.
+    """
+
+    this_week_days: int
+    this_week_total: int
+    this_month_days: int
+    this_month_total: int
+    overall_rate: float
+    overall_study_days: int
+    overall_total_days: int
+
+
+# 実績閾値定義（達成通知用）
 _TOTAL_HOURS_THRESHOLDS = [1, 5, 10, 25, 50, 100, 250, 500, 1000]
 _STUDY_DAYS_THRESHOLDS = [3, 7, 14, 30, 60, 100, 200, 365]
 _STREAK_THRESHOLDS = [3, 7, 14, 30, 60, 100]
@@ -112,7 +150,7 @@ class MotivationCalculator:
     """モチベーション関連の統計計算を行うクラス.
 
     StudyLogのリストからストリーク、今日の学習状況、
-    マイルストーン、週間比較データを生成する。
+    実績、自己ベスト、継続率データを生成する。
     """
 
     def calculate_streak(
@@ -194,25 +232,25 @@ class MotivationCalculator:
         logs: list[StudyLog],
         current_streak: int = 0,
     ) -> MilestoneData:
-        """マイルストーンを計算する.
+        """実績を計算する.
 
-        達成済みの直近マイルストーンと次のマイルストーンを返す。
+        累計値と閾値達成通知の両方を返す。
 
         Args:
             logs: 学習ログのリスト.
             current_streak: 現在の連続学習日数.
 
         Returns:
-            マイルストーンデータ.
+            実績データ.
         """
         total_minutes = sum(log.duration_minutes for log in logs)
-        total_hours = total_minutes / 60
+        total_hours = round(total_minutes / 60, 1)
         study_days = len({log.study_date for log in logs})
 
         achieved: list[Milestone] = []
         next_milestone: Milestone | None = None
 
-        # 累計時間のマイルストーン
+        # 累計時間の閾値達成
         for threshold in _TOTAL_HOURS_THRESHOLDS:
             if total_hours >= threshold:
                 achieved.append(
@@ -230,7 +268,7 @@ class MotivationCalculator:
                 )
                 break
 
-        # 学習日数のマイルストーン
+        # 学習日数の閾値達成
         for threshold in _STUDY_DAYS_THRESHOLDS:
             if study_days >= threshold:
                 achieved.append(
@@ -249,7 +287,7 @@ class MotivationCalculator:
                     )
                 break
 
-        # ストリークのマイルストーン
+        # ストリークの閾値達成
         for threshold in _STREAK_THRESHOLDS:
             if current_streak >= threshold:
                 achieved.append(
@@ -275,67 +313,18 @@ class MotivationCalculator:
         achieved = achieved[:5]
 
         logger.debug(
-            f"Milestones: {len(achieved)} achieved, "
+            f"Milestones: total_hours={total_hours}, "
+            f"study_days={study_days}, current_streak={current_streak}, "
+            f"{len(achieved)} achieved, "
             f"next={next_milestone.label if next_milestone else 'None'}"
         )
 
         return MilestoneData(
+            total_hours=total_hours,
+            study_days=study_days,
+            current_streak=current_streak,
             achieved=achieved,
             next_milestone=next_milestone,
-        )
-
-    def calculate_weekly_comparison(
-        self,
-        logs: list[StudyLog],
-        today: date | None = None,
-    ) -> WeeklyComparisonData:
-        """今週と先週の学習時間を比較する.
-
-        今週 = 今日の週の月曜日〜今日
-        先週 = 前週の月曜日〜日曜日
-
-        Args:
-            logs: 学習ログのリスト.
-            today: 基準日（デフォルト今日）.
-
-        Returns:
-            週間比較データ.
-        """
-        if today is None:
-            today = date.today()
-
-        # 今週の月曜日
-        this_monday = today - timedelta(days=today.weekday())
-        # 先週の月曜日・日曜日
-        last_monday = this_monday - timedelta(days=7)
-        last_sunday = this_monday - timedelta(days=1)
-
-        this_week_minutes = sum(
-            log.duration_minutes
-            for log in logs
-            if this_monday <= log.study_date <= today
-        )
-        last_week_minutes = sum(
-            log.duration_minutes
-            for log in logs
-            if last_monday <= log.study_date <= last_sunday
-        )
-
-        difference = this_week_minutes - last_week_minutes
-        change_percent: float | None = None
-        if last_week_minutes > 0:
-            change_percent = round((difference / last_week_minutes) * 100, 1)
-
-        logger.debug(
-            f"Weekly comparison: this={this_week_minutes}min, "
-            f"last={last_week_minutes}min, diff={difference}min"
-        )
-
-        return WeeklyComparisonData(
-            this_week_minutes=this_week_minutes,
-            last_week_minutes=last_week_minutes,
-            difference_minutes=difference,
-            change_percent=change_percent,
         )
 
     @staticmethod
@@ -363,3 +352,127 @@ class MotivationCalculator:
                 current = 1
 
         return longest
+
+    def calculate_personal_records(
+        self,
+        logs: list[StudyLog],
+        _today: date | None = None,
+    ) -> PersonalRecordData:
+        """自己ベスト記録を計算する.
+
+        Args:
+            logs: 学習ログのリスト.
+            _today: 基準日（デフォルト今日、未使用だが将来拡張用）.
+
+        Returns:
+            自己ベスト記録データ.
+        """
+        if not logs:
+            return PersonalRecordData(
+                best_day_minutes=0,
+                best_day_date=None,
+                best_week_minutes=0,
+                best_week_start=None,
+                longest_streak=0,
+                total_hours=0.0,
+                total_study_days=0,
+            )
+
+        # 日別合計
+        daily_totals: dict[date, int] = defaultdict(int)
+        for log in logs:
+            daily_totals[log.study_date] += log.duration_minutes
+
+        best_day_date = max(daily_totals, key=daily_totals.get)  # type: ignore[arg-type]
+        best_day_minutes = daily_totals[best_day_date]
+
+        # ISO週別合計（月曜始まり）
+        weekly_totals: dict[date, int] = defaultdict(int)
+        for log in logs:
+            monday = log.study_date - timedelta(days=log.study_date.weekday())
+            weekly_totals[monday] += log.duration_minutes
+
+        best_week_start = max(weekly_totals, key=weekly_totals.get)  # type: ignore[arg-type]
+        best_week_minutes = weekly_totals[best_week_start]
+
+        # 最長ストリーク
+        study_dates = {log.study_date for log in logs}
+        longest_streak = self._calculate_longest_streak(study_dates)
+
+        # 累計
+        total_minutes = sum(log.duration_minutes for log in logs)
+        total_hours = round(total_minutes / 60, 1)
+        total_study_days = len(study_dates)
+
+        logger.debug(
+            f"Personal records: best_day={best_day_minutes}min on {best_day_date}, "
+            f"best_week={best_week_minutes}min from {best_week_start}, "
+            f"longest_streak={longest_streak}"
+        )
+
+        return PersonalRecordData(
+            best_day_minutes=best_day_minutes,
+            best_day_date=best_day_date,
+            best_week_minutes=best_week_minutes,
+            best_week_start=best_week_start,
+            longest_streak=longest_streak,
+            total_hours=total_hours,
+            total_study_days=total_study_days,
+        )
+
+    def calculate_consistency(
+        self,
+        logs: list[StudyLog],
+        today: date | None = None,
+    ) -> ConsistencyData:
+        """学習の継続率を計算する.
+
+        Args:
+            logs: 学習ログのリスト.
+            today: 基準日（デフォルト今日）.
+
+        Returns:
+            学習継続率データ.
+        """
+        if today is None:
+            today = date.today()
+
+        study_dates = {log.study_date for log in logs}
+
+        # 今週（月曜〜today）
+        this_monday = today - timedelta(days=today.weekday())
+        this_week_total = today.weekday() + 1  # 月=1, 火=2, ..., 日=7
+        this_week_days = len({d for d in study_dates if this_monday <= d <= today})
+
+        # 今月（1日〜today）
+        this_month_start = today.replace(day=1)
+        this_month_total = today.day
+        this_month_days = len(
+            {d for d in study_dates if this_month_start <= d <= today}
+        )
+
+        # 全期間
+        overall_study_days = len(study_dates)
+        if study_dates:
+            first_date = min(study_dates)
+            overall_total_days = (today - first_date).days + 1
+            overall_rate = round(overall_study_days / overall_total_days, 3)
+        else:
+            overall_total_days = 0
+            overall_rate = 0.0
+
+        logger.debug(
+            f"Consistency: week={this_week_days}/{this_week_total}, "
+            f"month={this_month_days}/{this_month_total}, "
+            f"overall={overall_rate:.1%}"
+        )
+
+        return ConsistencyData(
+            this_week_days=this_week_days,
+            this_week_total=this_week_total,
+            this_month_days=this_month_days,
+            this_month_total=this_month_total,
+            overall_rate=overall_rate,
+            overall_study_days=overall_study_days,
+            overall_total_days=overall_total_days,
+        )

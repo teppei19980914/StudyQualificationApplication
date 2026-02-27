@@ -158,6 +158,7 @@ class StudyLogDialog(QDialog):
         total_minutes = self._hours_spin.value() * 60 + self._minutes_spin.value()
         return {
             "task_id": str(self._task_combo.currentData()),
+            "task_name": self._task_combo.currentText(),
             "study_date": f"{study_qdate.year():04d}-{study_qdate.month():02d}-{study_qdate.day():02d}",
             "duration_minutes": total_minutes,
             "memo": self._memo_input.text().strip(),

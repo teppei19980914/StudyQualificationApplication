@@ -20,6 +20,7 @@ class TestStudyLogCreation:
         assert log.study_date == date(2026, 2, 26)
         assert log.duration_minutes == 30
         assert log.memo == ""
+        assert log.task_name == ""
         assert log.id  # UUIDが生成される
 
     def test_create_with_all_fields(self):
@@ -30,11 +31,13 @@ class TestStudyLogCreation:
             study_date=date(2026, 2, 26),
             duration_minutes=90,
             memo="集中して学習できた",
+            task_name="Udemy学習",
             created_at=now,
         )
         assert log.id == "log-1"
         assert log.duration_minutes == 90
         assert log.memo == "集中して学習できた"
+        assert log.task_name == "Udemy学習"
         assert log.created_at == now
 
 
@@ -105,11 +108,13 @@ class TestStudyLogSerialization:
             study_date=date(2026, 2, 26),
             duration_minutes=45,
             memo="テストメモ",
+            task_name="Udemy学習",
             created_at=now,
         )
         d = log.to_dict()
         assert d["id"] == "log-1"
         assert d["task_id"] == "task-1"
+        assert d["task_name"] == "Udemy学習"
         assert d["study_date"] == "2026-02-26"
         assert d["duration_minutes"] == 45
         assert d["memo"] == "テストメモ"
@@ -119,6 +124,7 @@ class TestStudyLogSerialization:
         data = {
             "id": "log-1",
             "task_id": "task-1",
+            "task_name": "Udemy学習",
             "study_date": "2026-02-26",
             "duration_minutes": 45,
             "memo": "テストメモ",
@@ -127,6 +133,7 @@ class TestStudyLogSerialization:
         log = StudyLog.from_dict(data)
         assert log.id == "log-1"
         assert log.task_id == "task-1"
+        assert log.task_name == "Udemy学習"
         assert log.study_date == date(2026, 2, 26)
         assert log.duration_minutes == 45
         assert log.memo == "テストメモ"
@@ -142,16 +149,30 @@ class TestStudyLogSerialization:
         log = StudyLog.from_dict(data)
         assert log.memo == ""
 
+    def test_from_dict_without_task_name(self):
+        """後方互換: task_nameなしのデータはデフォルト空文字."""
+        data = {
+            "id": "log-1",
+            "task_id": "task-1",
+            "study_date": "2026-02-26",
+            "duration_minutes": 30,
+            "created_at": "2026-02-26T10:00:00",
+        }
+        log = StudyLog.from_dict(data)
+        assert log.task_name == ""
+
     def test_roundtrip_serialization(self):
         original = StudyLog(
             task_id="task-1",
             study_date=date(2026, 3, 15),
             duration_minutes=120,
             memo="往復テスト",
+            task_name="テストタスク",
         )
         restored = StudyLog.from_dict(original.to_dict())
         assert restored.id == original.id
         assert restored.task_id == original.task_id
+        assert restored.task_name == original.task_name
         assert restored.study_date == original.study_date
         assert restored.duration_minutes == original.duration_minutes
         assert restored.memo == original.memo

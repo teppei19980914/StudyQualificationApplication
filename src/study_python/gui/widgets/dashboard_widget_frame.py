@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -21,6 +22,7 @@ from study_python.gui.theme.theme_manager import ThemeManager
 logger = logging.getLogger(__name__)
 
 DRAG_MIME_TYPE = "application/x-dashboard-widget-index"
+PALETTE_DRAG_MIME_TYPE = "application/x-dashboard-widget-type"
 
 
 class DashboardWidgetFrame(QFrame):
@@ -79,6 +81,7 @@ class DashboardWidgetFrame(QFrame):
     def _setup_ui(self) -> None:
         """UIを構築する."""
         self.setObjectName("dashboard_widget_frame")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

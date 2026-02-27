@@ -38,6 +38,17 @@ class TaskService:
         """
         return self.task_repo.get_by_goal_id(goal_id)
 
+    def get_tasks_for_book(self, book_id: str) -> list[Task]:
+        """Book IDに紐づくTaskを取得する.
+
+        Args:
+            book_id: BookのID.
+
+        Returns:
+            Taskのリスト（order順）.
+        """
+        return self.task_repo.get_by_book_id(book_id)
+
     def get_all_tasks(self) -> list[Task]:
         """全Taskを取得する.
 
@@ -95,19 +106,22 @@ class TaskService:
         title: str,
         start_date: date,
         end_date: date,
-        status: TaskStatus,
         progress: int,
         memo: str = "",
         book_id: str = "",
     ) -> Task | None:
         """Taskを更新する.
 
+        ステータスは進捗率から自動決定される:
+        - 0%: 未着手
+        - 1-99%: 進行中
+        - 100%: 完了
+
         Args:
             task_id: 更新対象のTask ID.
             title: タスク名.
             start_date: 開始日.
             end_date: 終了日.
-            status: ステータス.
             progress: 進捗率（0-100）.
             memo: メモ.
             book_id: 関連書籍のID.
@@ -133,8 +147,8 @@ class TaskService:
         task.title = title
         task.start_date = start_date
         task.end_date = end_date
-        task.status = status
         task.progress = progress
+        task.status = self._status_from_progress(progress)
         task.memo = memo
         task.book_id = book_id
         task.updated_at = datetime.now()
@@ -178,13 +192,24 @@ class TaskService:
         if task is None:
             return None
         task.progress = progress
-        if progress == 0:
-            task.status = TaskStatus.NOT_STARTED
-        elif progress == 100:
-            task.status = TaskStatus.COMPLETED
-        else:
-            task.status = TaskStatus.IN_PROGRESS
+        task.status = self._status_from_progress(progress)
         task.updated_at = datetime.now()
         self.task_repo.update(task)
         logger.info(f"Updated progress for {task.title}: {progress}%")
         return task
+
+    @staticmethod
+    def _status_from_progress(progress: int) -> TaskStatus:
+        """進捗率からステータスを決定する.
+
+        Args:
+            progress: 進捗率（0-100）.
+
+        Returns:
+            対応するTaskStatus.
+        """
+        if progress == 0:
+            return TaskStatus.NOT_STARTED
+        if progress == 100:
+            return TaskStatus.COMPLETED
+        return TaskStatus.IN_PROGRESS

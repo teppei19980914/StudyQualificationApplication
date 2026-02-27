@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 from study_python.models.book import Book, BookStatus
+from study_python.models.task import BOOK_GANTT_GOAL_ID
 from study_python.repositories.book_repository import BookRepository
 from study_python.repositories.task_repository import TaskRepository
 
@@ -138,7 +139,10 @@ class BookService:
         return book
 
     def delete_book(self, book_id: str) -> bool:
-        """Bookを削除し、関連タスクのbook_idをクリアする.
+        """Bookを削除し、関連タスクを処理する.
+
+        書籍タスク（goal_id == BOOK_GANTT_GOAL_ID）は完全削除、
+        それ以外の参照タスクはbook_idをクリアする。
 
         Args:
             book_id: 削除対象のBook ID.
@@ -150,12 +154,21 @@ class BookService:
         if result:
             tasks = self.task_repo.get_all()
             cleared_count = 0
+            deleted_count = 0
             for task in tasks:
                 if task.book_id == book_id:
-                    task.book_id = ""
-                    task.updated_at = datetime.now()
-                    self.task_repo.update(task)
-                    cleared_count += 1
+                    if task.goal_id == BOOK_GANTT_GOAL_ID:
+                        self.task_repo.delete(task.id)
+                        deleted_count += 1
+                    else:
+                        task.book_id = ""
+                        task.updated_at = datetime.now()
+                        self.task_repo.update(task)
+                        cleared_count += 1
+            if deleted_count > 0:
+                logger.info(
+                    f"Deleted {deleted_count} book tasks for deleted book: {book_id}"
+                )
             if cleared_count > 0:
                 logger.info(
                     f"Cleared book_id from {cleared_count} tasks "

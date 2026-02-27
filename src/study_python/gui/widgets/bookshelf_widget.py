@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from study_python.gui.theme.theme_manager import ThemeManager
 from study_python.services.book_service import BookshelfData
@@ -46,6 +53,7 @@ class BookshelfWidget(QFrame):
     def _setup_ui(self) -> None:
         """UIを構築する."""
         self.setObjectName("bookshelf_widget")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         colors = self._theme_manager.get_colors()
         bg_card = colors.get("bg_card", "#2A2A3C")
         border = colors.get("border", "#45475A")
@@ -54,7 +62,6 @@ class BookshelfWidget(QFrame):
             f"  background-color: {bg_card};"
             f"  border: 1px solid {border};"
             f"  border-radius: 12px;"
-            f"  padding: 12px;"
             f"}}"
         )
 

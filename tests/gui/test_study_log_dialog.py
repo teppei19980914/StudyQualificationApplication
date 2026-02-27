@@ -69,6 +69,7 @@ class TestStudyLogDialogGetValues:
 
         values = dialog.get_values()
         assert values["task_id"] == "task-1"
+        assert values["task_name"] == "Udemy学習"
         assert values["study_date"] == "2026-03-15"
         assert values["duration_minutes"] == 90
         assert values["memo"] == "テストメモ"

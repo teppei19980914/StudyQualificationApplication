@@ -6,11 +6,12 @@ import pytest
 
 from study_python.models.study_log import StudyLog
 from study_python.services.motivation_calculator import (
+    ConsistencyData,
     MilestoneType,
     MotivationCalculator,
+    PersonalRecordData,
     StreakData,
     TodayStudyData,
-    WeeklyComparisonData,
 )
 
 
@@ -46,31 +47,6 @@ class TestTodayStudyData:
         assert data.total_minutes == 60
         assert data.session_count == 2
         assert data.studied is True
-
-
-class TestWeeklyComparisonData:
-    """WeeklyComparisonDataのテスト."""
-
-    def test_create(self):
-        data = WeeklyComparisonData(
-            this_week_minutes=120,
-            last_week_minutes=90,
-            difference_minutes=30,
-            change_percent=33.3,
-        )
-        assert data.this_week_minutes == 120
-        assert data.last_week_minutes == 90
-        assert data.difference_minutes == 30
-        assert data.change_percent == 33.3
-
-    def test_create_with_none_percent(self):
-        data = WeeklyComparisonData(
-            this_week_minutes=60,
-            last_week_minutes=0,
-            difference_minutes=60,
-            change_percent=None,
-        )
-        assert data.change_percent is None
 
 
 class TestCalculateStreak:
@@ -214,7 +190,65 @@ class TestCalculateTodayStudy:
 class TestCalculateMilestones:
     """calculate_milestonesのテスト."""
 
-    def test_no_logs(self, calculator):
+    def test_no_logs_cumulative(self, calculator):
+        """ログなしの累計値."""
+        result = calculator.calculate_milestones([])
+        assert result.total_hours == 0.0
+        assert result.study_days == 0
+        assert result.current_streak == 0
+
+    def test_total_hours(self, calculator):
+        """累計学習時間の計算."""
+        logs = [_make_log(date(2026, 2, 26), 90)]
+        result = calculator.calculate_milestones(logs)
+        assert result.total_hours == 1.5
+
+    def test_study_days(self, calculator):
+        """累計学習日数の計算."""
+        logs = [_make_log(date(2026, 2, 20) + timedelta(days=i), 30) for i in range(7)]
+        result = calculator.calculate_milestones(logs)
+        assert result.study_days == 7
+
+    def test_current_streak(self, calculator):
+        """連続学習日数の受け渡し."""
+        result = calculator.calculate_milestones([], current_streak=7)
+        assert result.current_streak == 7
+
+    def test_total_hours_rounding(self, calculator):
+        """累計時間が小数第1位に丸められる."""
+        # 100分 = 1.6666... → 1.7
+        logs = [_make_log(date(2026, 2, 26), 100)]
+        result = calculator.calculate_milestones(logs)
+        assert result.total_hours == 1.7
+
+    def test_multiple_logs_same_day(self, calculator):
+        """同じ日の複数ログは1日としてカウント."""
+        logs = [
+            _make_log(date(2026, 2, 26), 30, task_id="t1"),
+            _make_log(date(2026, 2, 26), 45, task_id="t2"),
+        ]
+        result = calculator.calculate_milestones(logs)
+        assert result.study_days == 1
+        assert result.total_hours == 1.2  # 75分 = 1.25 → 1.2
+
+    def test_large_values(self, calculator):
+        """大量学習のケース."""
+        logs = [
+            _make_log(date(2025, 1, 1) + timedelta(days=i), 180) for i in range(120)
+        ]
+        result = calculator.calculate_milestones(logs, current_streak=100)
+        assert result.total_hours == 360.0
+        assert result.study_days == 120
+        assert result.current_streak == 100
+
+    def test_zero_streak_default(self, calculator):
+        """current_streakのデフォルト値は0."""
+        logs = [_make_log(date(2026, 2, 26), 60)]
+        result = calculator.calculate_milestones(logs)
+        assert result.current_streak == 0
+
+    def test_no_logs_achieved(self, calculator):
+        """ログなしの閾値達成."""
         result = calculator.calculate_milestones([])
         assert result.achieved == []
         assert result.next_milestone is not None
@@ -222,7 +256,7 @@ class TestCalculateMilestones:
         assert result.next_milestone.value == 1
 
     def test_one_hour_achieved(self, calculator):
-        """累計1時間達成."""
+        """累計1時間達成の閾値通知."""
         logs = [_make_log(date(2026, 2, 26), 60)]
         result = calculator.calculate_milestones(logs)
         achieved_hours = [
@@ -231,7 +265,7 @@ class TestCalculateMilestones:
         assert any(m.value == 1 for m in achieved_hours)
 
     def test_study_days_milestone(self, calculator):
-        """学習日数マイルストーン."""
+        """学習日数の閾値達成."""
         logs = [_make_log(date(2026, 2, 20) + timedelta(days=i), 30) for i in range(7)]
         result = calculator.calculate_milestones(logs)
         achieved_days = [
@@ -241,7 +275,7 @@ class TestCalculateMilestones:
         assert any(m.value == 7 for m in achieved_days)
 
     def test_streak_milestone(self, calculator):
-        """ストリークマイルストーン."""
+        """ストリークの閾値達成."""
         result = calculator.calculate_milestones([], current_streak=7)
         achieved_streaks = [
             m for m in result.achieved if m.milestone_type == MilestoneType.STREAK
@@ -250,7 +284,7 @@ class TestCalculateMilestones:
         assert any(m.value == 7 for m in achieved_streaks)
 
     def test_next_milestone_when_partially_achieved(self, calculator):
-        """一部達成時の次のマイルストーン."""
+        """一部達成時の次の閾値."""
         # 2時間 = 120分（1h達成、5hが次）
         logs = [_make_log(date(2026, 2, 26), 120)]
         result = calculator.calculate_milestones(logs)
@@ -260,7 +294,6 @@ class TestCalculateMilestones:
 
     def test_achieved_sorted_by_value_descending(self, calculator):
         """達成済みは閾値降順でソート."""
-        # 600分=10時間、7日間学習
         logs = [_make_log(date(2026, 2, 20) + timedelta(days=i), 86) for i in range(7)]
         result = calculator.calculate_milestones(logs, current_streak=7)
         if len(result.achieved) >= 2:
@@ -269,7 +302,6 @@ class TestCalculateMilestones:
 
     def test_max_5_achieved(self, calculator):
         """達成済みは上位5件に制限."""
-        # 大量の学習でたくさんのマイルストーンを達成
         logs = [
             _make_log(date(2025, 1, 1) + timedelta(days=i), 180) for i in range(120)
         ]
@@ -277,7 +309,7 @@ class TestCalculateMilestones:
         assert len(result.achieved) <= 5
 
     def test_milestone_labels(self, calculator):
-        """マイルストーンのラベルが正しい."""
+        """閾値達成のラベルが正しい."""
         logs = [_make_log(date(2026, 2, 26), 60)]
         result = calculator.calculate_milestones(logs)
         achieved_hours = [
@@ -286,112 +318,10 @@ class TestCalculateMilestones:
         assert any("1時間" in m.label for m in achieved_hours)
 
     def test_next_milestone_label(self, calculator):
-        """次のマイルストーンのラベルが正しい."""
+        """次の閾値のラベルが正しい."""
         result = calculator.calculate_milestones([])
         assert result.next_milestone is not None
         assert "1時間" in result.next_milestone.label
-
-
-class TestCalculateWeeklyComparison:
-    """calculate_weekly_comparisonのテスト."""
-
-    def test_empty_logs(self, calculator):
-        result = calculator.calculate_weekly_comparison([], today=date(2026, 2, 26))
-        assert result.this_week_minutes == 0
-        assert result.last_week_minutes == 0
-        assert result.difference_minutes == 0
-        assert result.change_percent is None
-
-    def test_this_week_only(self, calculator):
-        """今週のみ学習."""
-        # 2026-02-26は木曜日、今週の月曜日=2/23
-        today = date(2026, 2, 26)
-        logs = [
-            _make_log(date(2026, 2, 23), 60),  # 月曜
-            _make_log(date(2026, 2, 25), 30),  # 水曜
-        ]
-        result = calculator.calculate_weekly_comparison(logs, today=today)
-        assert result.this_week_minutes == 90
-        assert result.last_week_minutes == 0
-        assert result.difference_minutes == 90
-        assert result.change_percent is None
-
-    def test_last_week_only(self, calculator):
-        """先週のみ学習."""
-        today = date(2026, 2, 26)
-        # 先週の月曜=2/16、日曜=2/22
-        logs = [
-            _make_log(date(2026, 2, 16), 60),
-            _make_log(date(2026, 2, 18), 30),
-        ]
-        result = calculator.calculate_weekly_comparison(logs, today=today)
-        assert result.this_week_minutes == 0
-        assert result.last_week_minutes == 90
-        assert result.difference_minutes == -90
-        assert result.change_percent == -100.0
-
-    def test_both_weeks(self, calculator):
-        """両方の週で学習."""
-        today = date(2026, 2, 26)
-        logs = [
-            _make_log(date(2026, 2, 17), 60),  # 先週
-            _make_log(date(2026, 2, 24), 90),  # 今週
-        ]
-        result = calculator.calculate_weekly_comparison(logs, today=today)
-        assert result.this_week_minutes == 90
-        assert result.last_week_minutes == 60
-        assert result.difference_minutes == 30
-        assert result.change_percent == 50.0
-
-    def test_decrease(self, calculator):
-        """今週が先週より少ない."""
-        today = date(2026, 2, 26)
-        logs = [
-            _make_log(date(2026, 2, 17), 120),  # 先週
-            _make_log(date(2026, 2, 24), 60),  # 今週
-        ]
-        result = calculator.calculate_weekly_comparison(logs, today=today)
-        assert result.difference_minutes == -60
-        assert result.change_percent == -50.0
-
-    def test_logs_outside_two_weeks_excluded(self, calculator):
-        """2週間外のログは含まれない."""
-        today = date(2026, 2, 26)
-        logs = [
-            _make_log(date(2026, 2, 1), 120),  # 2週間以上前
-            _make_log(date(2026, 2, 24), 30),  # 今週
-        ]
-        result = calculator.calculate_weekly_comparison(logs, today=today)
-        assert result.this_week_minutes == 30
-        assert result.last_week_minutes == 0
-
-    def test_monday_as_today(self, calculator):
-        """今日が月曜日の場合."""
-        # 2026-02-23は月曜日
-        today = date(2026, 2, 23)
-        logs = [
-            _make_log(date(2026, 2, 23), 60),  # 今週月曜
-            _make_log(date(2026, 2, 16), 30),  # 先週月曜
-        ]
-        result = calculator.calculate_weekly_comparison(logs, today=today)
-        assert result.this_week_minutes == 60
-        assert result.last_week_minutes == 30
-
-    def test_sunday_as_today(self, calculator):
-        """今日が日曜日の場合."""
-        # 2026-03-01は日曜日、今週の月曜は2/23
-        today = date(2026, 3, 1)
-        logs = [
-            _make_log(date(2026, 2, 23), 60),  # 今週月曜
-            _make_log(date(2026, 3, 1), 30),  # 今週日曜（今日）
-        ]
-        result = calculator.calculate_weekly_comparison(logs, today=today)
-        assert result.this_week_minutes == 90
-
-    def test_default_today(self, calculator):
-        result = calculator.calculate_weekly_comparison([])
-        assert result.this_week_minutes == 0
-        assert result.last_week_minutes == 0
 
 
 class TestCalculateLongestStreak:
@@ -434,3 +364,253 @@ class TestCalculateLongestStreak:
         }
         result = MotivationCalculator._calculate_longest_streak(dates)
         assert result == 3
+
+
+class TestPersonalRecordData:
+    """PersonalRecordDataのテスト."""
+
+    def test_create(self):
+        data = PersonalRecordData(
+            best_day_minutes=180,
+            best_day_date=date(2026, 2, 20),
+            best_week_minutes=600,
+            best_week_start=date(2026, 2, 17),
+            longest_streak=14,
+            total_hours=50.5,
+            total_study_days=30,
+        )
+        assert data.best_day_minutes == 180
+        assert data.best_day_date == date(2026, 2, 20)
+        assert data.best_week_minutes == 600
+        assert data.best_week_start == date(2026, 2, 17)
+        assert data.longest_streak == 14
+        assert data.total_hours == 50.5
+        assert data.total_study_days == 30
+
+    def test_create_empty(self):
+        data = PersonalRecordData(
+            best_day_minutes=0,
+            best_day_date=None,
+            best_week_minutes=0,
+            best_week_start=None,
+            longest_streak=0,
+            total_hours=0.0,
+            total_study_days=0,
+        )
+        assert data.best_day_date is None
+        assert data.best_week_start is None
+
+
+class TestConsistencyData:
+    """ConsistencyDataのテスト."""
+
+    def test_create(self):
+        data = ConsistencyData(
+            this_week_days=5,
+            this_week_total=7,
+            this_month_days=20,
+            this_month_total=28,
+            overall_rate=0.75,
+            overall_study_days=90,
+            overall_total_days=120,
+        )
+        assert data.this_week_days == 5
+        assert data.this_week_total == 7
+        assert data.this_month_days == 20
+        assert data.this_month_total == 28
+        assert data.overall_rate == 0.75
+        assert data.overall_study_days == 90
+        assert data.overall_total_days == 120
+
+
+class TestCalculatePersonalRecords:
+    """calculate_personal_recordsのテスト."""
+
+    def test_empty_logs(self, calculator):
+        result = calculator.calculate_personal_records([])
+        assert result.best_day_minutes == 0
+        assert result.best_day_date is None
+        assert result.best_week_minutes == 0
+        assert result.best_week_start is None
+        assert result.longest_streak == 0
+        assert result.total_hours == 0.0
+        assert result.total_study_days == 0
+
+    def test_single_log(self, calculator):
+        logs = [_make_log(date(2026, 2, 20), 60)]
+        result = calculator.calculate_personal_records(logs)
+        assert result.best_day_minutes == 60
+        assert result.best_day_date == date(2026, 2, 20)
+        assert result.best_week_minutes == 60
+        # 2026-02-20は金曜、月曜=2/16
+        assert result.best_week_start == date(2026, 2, 16)
+        assert result.longest_streak == 1
+        assert result.total_hours == 1.0
+        assert result.total_study_days == 1
+
+    def test_multiple_days_best_day(self, calculator):
+        """複数日から最大の1日を特定."""
+        logs = [
+            _make_log(date(2026, 2, 18), 30),
+            _make_log(date(2026, 2, 19), 120),
+            _make_log(date(2026, 2, 20), 60),
+        ]
+        result = calculator.calculate_personal_records(logs)
+        assert result.best_day_minutes == 120
+        assert result.best_day_date == date(2026, 2, 19)
+
+    def test_same_day_multiple_sessions(self, calculator):
+        """同じ日に複数セッションは合計で判定."""
+        logs = [
+            _make_log(date(2026, 2, 18), 30, task_id="t1"),
+            _make_log(date(2026, 2, 18), 40, task_id="t2"),
+            _make_log(date(2026, 2, 19), 60),
+        ]
+        result = calculator.calculate_personal_records(logs)
+        # 2/18: 30+40=70 > 2/19: 60
+        assert result.best_day_minutes == 70
+        assert result.best_day_date == date(2026, 2, 18)
+
+    def test_best_week(self, calculator):
+        """週間最大の特定."""
+        logs = [
+            # week 1 (2/16-2/22): 90
+            _make_log(date(2026, 2, 16), 30),
+            _make_log(date(2026, 2, 18), 60),
+            # week 2 (2/23-3/1): 150
+            _make_log(date(2026, 2, 23), 90),
+            _make_log(date(2026, 2, 25), 60),
+        ]
+        result = calculator.calculate_personal_records(logs)
+        assert result.best_week_minutes == 150
+        assert result.best_week_start == date(2026, 2, 23)
+
+    def test_longest_streak(self, calculator):
+        """最長ストリーク."""
+        logs = [
+            _make_log(date(2026, 2, 10), 30),
+            _make_log(date(2026, 2, 11), 30),
+            _make_log(date(2026, 2, 12), 30),
+            # gap
+            _make_log(date(2026, 2, 20), 30),
+            _make_log(date(2026, 2, 21), 30),
+        ]
+        result = calculator.calculate_personal_records(logs)
+        assert result.longest_streak == 3
+
+    def test_total_hours_and_days(self, calculator):
+        """累計時間と日数."""
+        logs = [
+            _make_log(date(2026, 2, 18), 90),
+            _make_log(date(2026, 2, 19), 90),
+            _make_log(date(2026, 2, 20), 120),
+        ]
+        result = calculator.calculate_personal_records(logs)
+        # 90+90+120=300分=5.0時間
+        assert result.total_hours == 5.0
+        assert result.total_study_days == 3
+
+
+class TestCalculateConsistency:
+    """calculate_consistencyのテスト."""
+
+    def test_empty_logs(self, calculator):
+        result = calculator.calculate_consistency([], today=date(2026, 2, 26))
+        assert result.this_week_days == 0
+        assert result.this_month_days == 0
+        assert result.overall_rate == 0.0
+        assert result.overall_study_days == 0
+        assert result.overall_total_days == 0
+
+    def test_this_week_days(self, calculator):
+        """今週の学習日数."""
+        # 2026-02-26は木曜、月曜=2/23、経過曜日=4(月火水木)
+        today = date(2026, 2, 26)
+        logs = [
+            _make_log(date(2026, 2, 23), 30),  # 月
+            _make_log(date(2026, 2, 24), 30),  # 火
+            _make_log(date(2026, 2, 26), 30),  # 木
+        ]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.this_week_days == 3
+        assert result.this_week_total == 4  # 月火水木
+
+    def test_this_month_days(self, calculator):
+        """今月の学習日数."""
+        today = date(2026, 2, 15)
+        logs = [
+            _make_log(date(2026, 2, 1), 30),
+            _make_log(date(2026, 2, 5), 30),
+            _make_log(date(2026, 2, 10), 30),
+            _make_log(date(2026, 2, 15), 30),
+        ]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.this_month_days == 4
+        assert result.this_month_total == 15
+
+    def test_overall_rate(self, calculator):
+        """全期間の継続率."""
+        today = date(2026, 2, 26)
+        # 2/20から2/26の7日間中、3日学習
+        logs = [
+            _make_log(date(2026, 2, 20), 30),
+            _make_log(date(2026, 2, 22), 30),
+            _make_log(date(2026, 2, 26), 30),
+        ]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.overall_study_days == 3
+        assert result.overall_total_days == 7  # 2/20~2/26
+        assert result.overall_rate == round(3 / 7, 3)
+
+    def test_monday_as_today(self, calculator):
+        """今日が月曜の場合、今週は1日のみ."""
+        today = date(2026, 2, 23)  # 月曜
+        logs = [_make_log(date(2026, 2, 23), 30)]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.this_week_days == 1
+        assert result.this_week_total == 1
+
+    def test_first_day_of_month(self, calculator):
+        """月初の場合、今月は1日のみ."""
+        today = date(2026, 2, 1)
+        logs = [_make_log(date(2026, 2, 1), 30)]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.this_month_days == 1
+        assert result.this_month_total == 1
+
+    def test_all_days_studied(self, calculator):
+        """全日学習した場合."""
+        today = date(2026, 2, 26)
+        # 2/20から毎日
+        logs = [_make_log(date(2026, 2, 20) + timedelta(days=i), 30) for i in range(7)]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.overall_study_days == 7
+        assert result.overall_total_days == 7
+        assert result.overall_rate == 1.0
+
+    def test_past_logs_not_in_this_week(self, calculator):
+        """先週のログは今週に含まれない."""
+        today = date(2026, 2, 26)  # 木曜
+        logs = [
+            _make_log(date(2026, 2, 22), 30),  # 先週日曜
+            _make_log(date(2026, 2, 26), 30),  # 今週木曜
+        ]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.this_week_days == 1
+
+    def test_default_today(self, calculator):
+        result = calculator.calculate_consistency([])
+        assert result.this_week_days == 0
+        assert result.overall_rate == 0.0
+
+    def test_multiple_sessions_same_day_counted_once(self, calculator):
+        """同じ日の複数セッションは1日としてカウント."""
+        today = date(2026, 2, 26)
+        logs = [
+            _make_log(date(2026, 2, 26), 30, task_id="t1"),
+            _make_log(date(2026, 2, 26), 45, task_id="t2"),
+        ]
+        result = calculator.calculate_consistency(logs, today=today)
+        assert result.this_week_days == 1
+        assert result.this_month_days == 1
+        assert result.overall_study_days == 1

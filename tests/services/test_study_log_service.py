@@ -86,6 +86,25 @@ class TestStudyLogServiceAddLog:
                 duration_minutes=0,
             )
 
+    def test_add_study_log_with_task_name(self, service):
+        log = service.add_study_log(
+            task_id="task-1",
+            study_date=date(2026, 2, 26),
+            duration_minutes=30,
+            task_name="Udemy学習",
+        )
+        assert log.task_name == "Udemy学習"
+
+    def test_add_study_log_task_name_persisted(self, service):
+        service.add_study_log(
+            task_id="task-1",
+            study_date=date(2026, 2, 26),
+            duration_minutes=30,
+            task_name="テスト",
+        )
+        logs = service.get_all_logs()
+        assert logs[0].task_name == "テスト"
+
     def test_add_study_log_persisted(self, service):
         service.add_study_log(
             task_id="task-1",
@@ -200,3 +219,50 @@ class TestStudyLogServiceGoalStats:
         task2_stats = stats.task_stats[1]
         assert task2_stats.total_minutes == 0
         assert task2_stats.study_days == 0
+
+
+class TestStudyLogServiceBackfillTaskNames:
+    """backfill_task_namesメソッドのテスト."""
+
+    def test_backfill_updates_empty_task_name(self, service):
+        """task_nameが空のログにタスク名がバックフィルされる."""
+        service.add_study_log("task-1", date(2026, 2, 26), 30)
+        updated = service.backfill_task_names({"task-1": "Udemy学習"})
+        assert updated == 1
+        logs = service.get_all_logs()
+        assert logs[0].task_name == "Udemy学習"
+
+    def test_backfill_skips_already_set(self, service):
+        """task_nameが既に設定済みのログはスキップされる."""
+        service.add_study_log("task-1", date(2026, 2, 26), 30, task_name="既存名")
+        updated = service.backfill_task_names({"task-1": "新しい名前"})
+        assert updated == 0
+        logs = service.get_all_logs()
+        assert logs[0].task_name == "既存名"
+
+    def test_backfill_skips_unknown_task(self, service):
+        """task_name_mapに存在しないタスクはスキップされる."""
+        service.add_study_log("task-1", date(2026, 2, 26), 30)
+        updated = service.backfill_task_names({"task-99": "存在しないタスク"})
+        assert updated == 0
+
+    def test_backfill_returns_zero_when_no_logs(self, service):
+        """ログがない場合は0を返す."""
+        updated = service.backfill_task_names({"task-1": "テスト"})
+        assert updated == 0
+
+    def test_backfill_multiple_logs(self, service):
+        """複数のログが同時にバックフィルされる."""
+        service.add_study_log("task-1", date(2026, 2, 26), 30)
+        service.add_study_log("task-2", date(2026, 2, 27), 60)
+        service.add_study_log("task-1", date(2026, 2, 28), 45)
+        updated = service.backfill_task_names(
+            {"task-1": "タスク1", "task-2": "タスク2"}
+        )
+        assert updated == 3
+        logs = service.get_all_logs()
+        for log in logs:
+            if log.task_id == "task-1":
+                assert log.task_name == "タスク1"
+            else:
+                assert log.task_name == "タスク2"

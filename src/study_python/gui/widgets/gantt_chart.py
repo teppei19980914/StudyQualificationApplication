@@ -171,12 +171,18 @@ class GanttChart(QGraphicsView):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
 
-    def display_tasks(self, tasks: list[Task], goal_color: str = "#89B4FA") -> None:
+    def display_tasks(
+        self,
+        tasks: list[Task],
+        goal_color: str = "#89B4FA",
+        goal_colors: dict[str, str] | None = None,
+    ) -> None:
         """タスクをガントチャートに表示する.
 
         Args:
             tasks: 表示するTaskのリスト.
-            goal_color: Goalの表示色.
+            goal_color: Goalの表示色（単一目標モード）.
+            goal_colors: Goal IDから色へのマッピング（複数目標モード）.
         """
         self._scene.clear()
         colors = self._theme_manager.get_colors()
@@ -195,7 +201,7 @@ class GanttChart(QGraphicsView):
         self._draw_grid(timeline, len(tasks), colors)
         self._draw_header(timeline, colors)
         self._draw_today_line(timeline, scene_height, colors)
-        self._draw_bars(tasks, timeline, goal_color, colors)
+        self._draw_bars(tasks, timeline, goal_color, colors, goal_colors)
 
     def _draw_empty_message(self, colors: dict[str, str]) -> None:
         """タスクが無い場合のメッセージを表示する.
@@ -340,14 +346,16 @@ class GanttChart(QGraphicsView):
         timeline: TimelineRange,
         goal_color: str,
         colors: dict[str, str],
+        goal_colors: dict[str, str] | None = None,
     ) -> None:
         """タスクバーを描画する.
 
         Args:
             tasks: タスクのリスト.
             timeline: タイムライン範囲.
-            goal_color: Goalの表示色.
+            goal_color: Goalの表示色（フォールバック）.
             colors: テーマカラーパレット.
+            goal_colors: Goal IDから色へのマッピング.
         """
         calc = self._calculator
         for i, task in enumerate(tasks):
@@ -356,9 +364,13 @@ class GanttChart(QGraphicsView):
             )
             y = calc.calculate_bar_y(i)
 
+            bar_color = goal_color
+            if goal_colors:
+                bar_color = goal_colors.get(task.goal_id, goal_color)
+
             bar = GanttBarItem(
                 task=task,
-                goal_color=goal_color,
+                goal_color=bar_color,
                 x=bar_geo.x,
                 y=y,
                 width=bar_geo.width,

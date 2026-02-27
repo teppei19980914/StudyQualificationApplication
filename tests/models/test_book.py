@@ -178,3 +178,120 @@ class TestBookSerialization:
         restored = Book.from_dict(original.to_dict())
         assert restored.title == original.title
         assert restored.completed_date is None
+
+
+class TestBookScheduleFields:
+    """スケジュールフィールドのテスト."""
+
+    def test_default_schedule_is_none(self) -> None:
+        book = Book(title="テスト")
+        assert book.start_date is None
+        assert book.end_date is None
+        assert book.progress == 0
+
+    def test_create_with_schedule(self) -> None:
+        book = Book(
+            title="テスト",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 31),
+            progress=50,
+        )
+        assert book.start_date == date(2026, 3, 1)
+        assert book.end_date == date(2026, 3, 31)
+        assert book.progress == 50
+
+    def test_has_schedule_true(self) -> None:
+        book = Book(
+            title="テスト",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 31),
+        )
+        assert book.has_schedule is True
+
+    def test_has_schedule_false_no_dates(self) -> None:
+        book = Book(title="テスト")
+        assert book.has_schedule is False
+
+    def test_has_schedule_false_partial(self) -> None:
+        book = Book(title="テスト", start_date=date(2026, 3, 1))
+        assert book.has_schedule is False
+
+    def test_progress_below_zero_raises(self) -> None:
+        with pytest.raises(ValueError, match="進捗率は0-100"):
+            Book(title="テスト", progress=-1)
+
+    def test_progress_above_100_raises(self) -> None:
+        with pytest.raises(ValueError, match="進捗率は0-100"):
+            Book(title="テスト", progress=101)
+
+    def test_end_before_start_raises(self) -> None:
+        with pytest.raises(ValueError, match="終了日は開始日以降"):
+            Book(
+                title="テスト",
+                start_date=date(2026, 3, 31),
+                end_date=date(2026, 3, 1),
+            )
+
+    def test_to_dict_with_schedule(self) -> None:
+        book = Book(
+            title="テスト",
+            id="book-1",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 31),
+            progress=50,
+            created_at=datetime(2026, 1, 1),
+            updated_at=datetime(2026, 1, 1),
+        )
+        d = book.to_dict()
+        assert d["start_date"] == "2026-03-01"
+        assert d["end_date"] == "2026-03-31"
+        assert d["progress"] == 50
+
+    def test_to_dict_without_schedule(self) -> None:
+        book = Book(title="テスト", id="book-2")
+        d = book.to_dict()
+        assert d["start_date"] is None
+        assert d["end_date"] is None
+        assert d["progress"] == 0
+
+    def test_from_dict_with_schedule(self) -> None:
+        data = {
+            "id": "book-1",
+            "title": "テスト",
+            "status": "reading",
+            "start_date": "2026-03-01",
+            "end_date": "2026-03-31",
+            "progress": 50,
+            "created_at": "2026-01-01T10:00:00",
+            "updated_at": "2026-01-01T10:00:00",
+        }
+        book = Book.from_dict(data)
+        assert book.start_date == date(2026, 3, 1)
+        assert book.end_date == date(2026, 3, 31)
+        assert book.progress == 50
+
+    def test_from_dict_backward_compatible(self) -> None:
+        """旧データ（スケジュールフィールドなし）からの読み込み."""
+        data = {
+            "id": "book-old",
+            "title": "旧データ",
+            "status": "unread",
+            "created_at": "2026-01-01T10:00:00",
+            "updated_at": "2026-01-01T10:00:00",
+        }
+        book = Book.from_dict(data)
+        assert book.start_date is None
+        assert book.end_date is None
+        assert book.progress == 0
+
+    def test_roundtrip_with_schedule(self) -> None:
+        original = Book(
+            title="往復テスト",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 31),
+            progress=75,
+        )
+        restored = Book.from_dict(original.to_dict())
+        assert restored.start_date == original.start_date
+        assert restored.end_date == original.end_date
+        assert restored.progress == original.progress

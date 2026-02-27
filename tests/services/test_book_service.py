@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from study_python.models.book import BookStatus
-from study_python.models.task import Task
+from study_python.models.task import BOOK_GANTT_GOAL_ID, Task
 from study_python.repositories.book_repository import BookRepository
 from study_python.repositories.json_storage import JsonStorage
 from study_python.repositories.task_repository import TaskRepository
@@ -196,6 +196,57 @@ class TestBookServiceDeleteBook:
         updated_task = task_repo.get_by_id(task.id)
         assert updated_task is not None
         assert updated_task.book_id == "other-book"
+
+    def test_delete_book_deletes_book_tasks(
+        self, service: BookService, task_repo: TaskRepository
+    ) -> None:
+        """書籍タスク（BOOK_GANTT_GOAL_ID）は完全削除される."""
+        book = service.create_book("テスト")
+        task = Task(
+            goal_id=BOOK_GANTT_GOAL_ID,
+            title="書籍タスク",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            book_id=book.id,
+        )
+        task_repo.add(task)
+
+        service.delete_book(book.id)
+
+        assert task_repo.get_by_id(task.id) is None
+
+    def test_delete_book_clears_ref_but_deletes_book_tasks(
+        self, service: BookService, task_repo: TaskRepository
+    ) -> None:
+        """参照タスクはbook_idクリア、書籍タスクは完全削除."""
+        book = service.create_book("テスト")
+        # 書籍タスク（完全削除対象）
+        book_task = Task(
+            goal_id=BOOK_GANTT_GOAL_ID,
+            title="書籍タスク",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            book_id=book.id,
+        )
+        task_repo.add(book_task)
+        # 参照タスク（book_idクリア対象）
+        ref_task = Task(
+            goal_id="goal-1",
+            title="参照タスク",
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 15),
+            book_id=book.id,
+        )
+        task_repo.add(ref_task)
+
+        service.delete_book(book.id)
+
+        # 書籍タスクは削除
+        assert task_repo.get_by_id(book_task.id) is None
+        # 参照タスクはbook_idクリアのみ
+        updated_ref = task_repo.get_by_id(ref_task.id)
+        assert updated_ref is not None
+        assert updated_ref.book_id == ""
 
 
 class TestBookServiceGetBookshelfData:

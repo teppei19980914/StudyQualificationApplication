@@ -71,6 +71,72 @@ class TestGanttChart:
         bar_items = [i for i in items if isinstance(i, GanttBarItem)]
         assert len(bar_items) == 1
 
+    def test_display_tasks_multi_goal_colors(self, qtbot, theme_manager):
+        """goal_colorsで複数目標の色分け表示."""
+        chart = GanttChart(theme_manager)
+        qtbot.addWidget(chart)
+        tasks = [
+            Task(
+                goal_id="g1",
+                title="タスク1",
+                start_date=date(2026, 3, 1),
+                end_date=date(2026, 3, 15),
+                progress=30,
+            ),
+            Task(
+                goal_id="g2",
+                title="タスク2",
+                start_date=date(2026, 3, 10),
+                end_date=date(2026, 3, 25),
+                progress=60,
+            ),
+        ]
+        goal_colors = {"g1": "#4A9EFF", "g2": "#FF6B6B"}
+        chart.display_tasks(tasks, goal_colors=goal_colors)
+        items = chart.scene().items()
+        bar_items = [i for i in items if isinstance(i, GanttBarItem)]
+        assert len(bar_items) == 2
+        colors = {b.task.goal_id: b.goal_color for b in bar_items}
+        assert colors["g1"] == "#4A9EFF"
+        assert colors["g2"] == "#FF6B6B"
+
+    def test_display_tasks_goal_colors_fallback(self, qtbot, theme_manager):
+        """goal_colorsに無いgoal_idはフォールバック色を使用."""
+        chart = GanttChart(theme_manager)
+        qtbot.addWidget(chart)
+        tasks = [
+            Task(
+                goal_id="g_unknown",
+                title="タスク",
+                start_date=date(2026, 3, 1),
+                end_date=date(2026, 3, 15),
+            ),
+        ]
+        goal_colors = {"g1": "#4A9EFF"}
+        chart.display_tasks(tasks, goal_color="#AABBCC", goal_colors=goal_colors)
+        items = chart.scene().items()
+        bar_items = [i for i in items if isinstance(i, GanttBarItem)]
+        assert len(bar_items) == 1
+        assert bar_items[0].goal_color == "#AABBCC"
+
+    def test_display_tasks_backward_compatible(self, qtbot, theme_manager):
+        """goal_colors未指定時は従来通りgoal_colorを使用."""
+        chart = GanttChart(theme_manager)
+        qtbot.addWidget(chart)
+        tasks = [
+            Task(
+                goal_id="g1",
+                title="タスク",
+                start_date=date(2026, 3, 1),
+                end_date=date(2026, 3, 15),
+            ),
+        ]
+        chart.display_tasks(tasks, "#AABBCC")
+        items = chart.scene().items()
+        bar_items = [i for i in items if isinstance(i, GanttBarItem)]
+        assert len(bar_items) == 1
+        assert bar_items[0].goal_color == "#AABBCC"
+
 
 class TestGanttBarItem:
     """GanttBarItemのテスト."""

@@ -92,6 +92,25 @@ class StudyLogRepository:
         logger.warning(f"Study log not found for delete: {log_id}")
         return False
 
+    def update(self, study_log: StudyLog) -> bool:
+        """StudyLogを更新する.
+
+        Args:
+            study_log: 更新するStudyLog.
+
+        Returns:
+            更新に成功した場合True.
+        """
+        data = self.storage.load()
+        for i, d in enumerate(data):
+            if d["id"] == study_log.id:
+                data[i] = study_log.to_dict()
+                self.storage.save(data)
+                logger.info(f"Updated study log: {study_log.id}")
+                return True
+        logger.warning(f"Study log not found for update: {study_log.id}")
+        return False
+
     def delete_by_task_id(self, task_id: str) -> int:
         """Task IDに紐づくStudyLogを全削除する.
 

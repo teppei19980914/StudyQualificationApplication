@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -15,19 +16,36 @@ from PySide6.QtWidgets import (
 )
 
 from study_python.gui.theme.theme_manager import ThemeManager
-from study_python.gui.widgets.daily_activity_chart import DailyActivityChart
-from study_python.gui.widgets.milestone_section import MilestoneSection
+from study_python.gui.widgets.activity_chart_section import ActivityChartSection
+from study_python.gui.widgets.consistency_card import ConsistencyCard
+from study_python.gui.widgets.goal_stats_section import (
+    GoalStatsDisplayData,
+    GoalStatsSection,
+)
+from study_python.gui.widgets.milestone_button import MilestoneButton
+from study_python.gui.widgets.personal_record_card import PersonalRecordCard
 from study_python.gui.widgets.study_log_table import StudyLogEntry, StudyLogTable
 from study_python.gui.widgets.today_study_banner import TodayStudyBanner
-from study_python.gui.widgets.weekly_comparison_card import WeeklyComparisonCard
+from study_python.models.task import BOOK_GANTT_GOAL_ID, TaskStatus
+from study_python.services.book_service import BookService
 from study_python.services.goal_service import GoalService
 from study_python.services.motivation_calculator import MotivationCalculator
-from study_python.services.study_log_service import GoalStudyStats, StudyLogService
-from study_python.services.study_stats_calculator import StudyStatsCalculator
+from study_python.services.study_log_service import StudyLogService
+from study_python.services.study_stats_calculator import (
+    ActivityPeriodType,
+    StudyStatsCalculator,
+)
 from study_python.services.task_service import TaskService
 
 
 logger = logging.getLogger(__name__)
+
+_TASK_STATUS_LABELS: dict[TaskStatus, str] = {
+    TaskStatus.NOT_STARTED: "未着手",
+    TaskStatus.IN_PROGRESS: "実施中",
+    TaskStatus.COMPLETED: "完了",
+}
+_DELETED_STATUS_LABEL = "削除済み"
 
 
 class SummaryCard(QFrame):
@@ -56,7 +74,7 @@ class SummaryCard(QFrame):
         """
         super().__init__(parent)
         self.setObjectName("summary_card")
-        self.setMinimumSize(160, 100)
+        self.setMinimumHeight(100)
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -86,102 +104,6 @@ class SummaryCard(QFrame):
         self._value_label.setText(value)
 
 
-class GoalStatsCard(QFrame):
-    """目標別統計カード.
-
-    目標名、カラーバー、タスク別の学習統計を表示する。
-    """
-
-    def __init__(
-        self,
-        goal_name: str,
-        goal_color: str,
-        stats: GoalStudyStats,
-        task_names: dict[str, str],
-        parent: QWidget | None = None,
-    ) -> None:
-        """GoalStatsCardを初期化する.
-
-        Args:
-            goal_name: 目標名.
-            goal_color: 目標の色.
-            stats: 目標の学習統計.
-            task_names: {task_id: task_title}のマッピング.
-            parent: 親ウィジェット.
-        """
-        super().__init__(parent)
-        self.setObjectName("goal_stats_card")
-        self._setup_ui(goal_name, goal_color, stats, task_names)
-
-    def _setup_ui(
-        self,
-        goal_name: str,
-        goal_color: str,
-        stats: GoalStudyStats,
-        task_names: dict[str, str],
-    ) -> None:
-        """UIを構築する.
-
-        Args:
-            goal_name: 目標名.
-            goal_color: 目標の色.
-            stats: 目標の学習統計.
-            task_names: {task_id: task_title}のマッピング.
-        """
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(16, 12, 16, 12)
-
-        # 目標名ヘッダー（カラーバー付き）
-        header_layout = QHBoxLayout()
-        color_bar = QFrame()
-        color_bar.setFixedSize(4, 24)
-        color_bar.setStyleSheet(f"background-color: {goal_color}; border-radius: 2px;")
-        header_layout.addWidget(color_bar)
-
-        name_label = QLabel(goal_name)
-        name_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        header_layout.addWidget(name_label)
-        header_layout.addStretch()
-        layout.addLayout(header_layout)
-
-        # タスク別内訳
-        for ts in stats.task_stats:
-            task_name = task_names.get(ts.task_id, ts.task_id)
-            hours = ts.total_minutes // 60
-            mins = ts.total_minutes % 60
-            time_text = f"{hours}h {mins:02d}min" if hours > 0 else f"{mins}min"
-
-            task_layout = QHBoxLayout()
-            task_label = QLabel(f"  {task_name}")
-            task_label.setObjectName("muted_text")
-            task_layout.addWidget(task_label)
-            task_layout.addStretch()
-            detail_label = QLabel(f"{time_text} / {ts.study_days}日")
-            detail_label.setObjectName("muted_text")
-            task_layout.addWidget(detail_label)
-            layout.addLayout(task_layout)
-
-        # 合計行
-        total_hours = stats.total_minutes // 60
-        total_mins = stats.total_minutes % 60
-        total_time = (
-            f"{total_hours}h {total_mins:02d}min"
-            if total_hours > 0
-            else f"{total_mins}min"
-        )
-
-        total_layout = QHBoxLayout()
-        total_label = QLabel("  合計")
-        total_label.setStyleSheet("font-weight: 600;")
-        total_layout.addWidget(total_label)
-        total_layout.addStretch()
-        total_value = QLabel(f"{total_time} / {stats.total_study_days}日")
-        total_value.setStyleSheet("font-weight: 600;")
-        total_layout.addWidget(total_value)
-        layout.addLayout(total_layout)
-
-
 class StatsPage(QWidget):
     """学習統計ページ."""
 
@@ -191,6 +113,7 @@ class StatsPage(QWidget):
         task_service: TaskService,
         study_log_service: StudyLogService,
         theme_manager: ThemeManager,
+        book_service: BookService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """StatsPageを初期化する.
@@ -200,6 +123,7 @@ class StatsPage(QWidget):
             task_service: TaskService.
             study_log_service: StudyLogService.
             theme_manager: テーママネージャ.
+            book_service: BookService（読書統計用、省略可）.
             parent: 親ウィジェット.
         """
         super().__init__(parent)
@@ -207,19 +131,37 @@ class StatsPage(QWidget):
         self._task_service = task_service
         self._study_log_service = study_log_service
         self._theme_manager = theme_manager
-        self._goal_cards: list[GoalStatsCard] = []
+        self._book_service = book_service
         self._setup_ui()
 
     def _setup_ui(self) -> None:
         """UIを構築する."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 24, 32, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # ヘッダー
+        # ページ全体のスクロールエリア
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(32, 24, 32, 24)
+        container_layout.setSpacing(16)
+
+        # ヘッダー（タイトル + 実績ボタン）
+        header_layout = QHBoxLayout()
         title = QLabel("学習統計")
         title.setObjectName("section_title")
-        layout.addWidget(title)
+        header_layout.addWidget(title)
+
+        header_layout.addStretch()
+
+        self._milestone_button = MilestoneButton(self._theme_manager)
+        header_layout.addWidget(self._milestone_button)
+
+        container_layout.addLayout(header_layout)
 
         desc = QLabel(
             "毎日の積み重ねが大きな成果につながります。"
@@ -227,69 +169,56 @@ class StatsPage(QWidget):
         )
         desc.setObjectName("muted_text")
         desc.setWordWrap(True)
-        layout.addWidget(desc)
+        container_layout.addWidget(desc)
 
         # 今日の学習状況バナー
         self._today_banner = TodayStudyBanner(self._theme_manager)
-        layout.addWidget(self._today_banner)
+        container_layout.addWidget(self._today_banner)
 
-        # サマリーカード
+        # サマリーカード（均等幅）
         summary_layout = QHBoxLayout()
         summary_layout.setSpacing(16)
 
         self._total_time_card = SummaryCard("⏱️", "0h", "合計学習時間")
-        summary_layout.addWidget(self._total_time_card)
+        summary_layout.addWidget(self._total_time_card, 1)
 
         self._total_days_card = SummaryCard("📅", "0日", "学習日数")
-        summary_layout.addWidget(self._total_days_card)
+        summary_layout.addWidget(self._total_days_card, 1)
 
         self._goal_count_card = SummaryCard("🎯", "0個", "目標数")
-        summary_layout.addWidget(self._goal_count_card)
+        summary_layout.addWidget(self._goal_count_card, 1)
 
         self._streak_card = SummaryCard("🔥", "0日", "連続学習")
-        summary_layout.addWidget(self._streak_card)
+        summary_layout.addWidget(self._streak_card, 1)
 
-        summary_layout.addStretch()
-        layout.addLayout(summary_layout)
+        container_layout.addLayout(summary_layout)
 
-        # 週間比較 + マイルストーン（横並び）
-        motivation_layout = QHBoxLayout()
-        motivation_layout.setSpacing(16)
+        # 自己ベスト記録
+        self._personal_record_card = PersonalRecordCard(self._theme_manager)
+        container_layout.addWidget(self._personal_record_card)
 
-        self._weekly_card = WeeklyComparisonCard(self._theme_manager)
-        motivation_layout.addWidget(self._weekly_card, 1)
+        # 学習継続率
+        self._consistency_card = ConsistencyCard(self._theme_manager)
+        container_layout.addWidget(self._consistency_card)
 
-        self._milestone_section = MilestoneSection(self._theme_manager)
-        motivation_layout.addWidget(self._milestone_section, 1)
+        # 学習アクティビティチャート
+        self._activity_chart_section = ActivityChartSection(self._theme_manager)
+        container_layout.addWidget(self._activity_chart_section)
 
-        layout.addLayout(motivation_layout)
+        # 目標別統計（プルダウン切替）
+        self._goal_stats_section = GoalStatsSection(self._theme_manager)
+        container_layout.addWidget(self._goal_stats_section)
 
-        # 日別学習アクティビティチャート
-        chart_title = QLabel("日別学習アクティビティ")
-        chart_title.setObjectName("card_title")
-        layout.addWidget(chart_title)
-
-        self._activity_chart = DailyActivityChart(self._theme_manager)
-        layout.addWidget(self._activity_chart)
-
-        # 学習ログ履歴テーブル
+        # 学習ログ履歴テーブル（最下部）
         log_title = QLabel("学習ログ履歴")
         log_title.setObjectName("card_title")
-        layout.addWidget(log_title)
+        container_layout.addWidget(log_title)
 
         self._log_table = StudyLogTable(self._theme_manager)
-        layout.addWidget(self._log_table)
+        container_layout.addWidget(self._log_table)
 
-        # スクロールエリア（目標別統計）
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self._scroll_content = QWidget()
-        self._scroll_layout = QVBoxLayout(self._scroll_content)
-        self._scroll_layout.setSpacing(12)
-        self._scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        scroll.setWidget(self._scroll_content)
+        container_layout.addStretch()
+        scroll.setWidget(container)
         layout.addWidget(scroll, 1)
 
     def refresh(self) -> None:
@@ -320,54 +249,129 @@ class StatsPage(QWidget):
         milestone_data = motivation.calculate_milestones(
             all_logs, streak_data.current_streak
         )
-        self._milestone_section.set_data(milestone_data)
+        self._milestone_button.set_data(milestone_data)
 
-        weekly_data = motivation.calculate_weekly_comparison(all_logs)
-        self._weekly_card.set_data(weekly_data)
+        record_data = motivation.calculate_personal_records(all_logs)
+        self._personal_record_card.set_data(record_data)
 
-        # 日別アクティビティチャート
+        consistency_data = motivation.calculate_consistency(all_logs)
+        self._consistency_card.set_data(consistency_data)
+
+        # 学習アクティビティチャート
         calculator = StudyStatsCalculator()
-        activity_data = calculator.calculate_daily_activity(all_logs)
-        self._activity_chart.set_data(activity_data)
+        all_chart_data = {
+            pt: calculator.calculate_activity(all_logs, pt) for pt in ActivityPeriodType
+        }
+        self._activity_chart_section.set_all_data(all_chart_data)
 
         # 学習ログ履歴テーブル
         all_tasks = self._task_service.get_all_tasks()
         task_name_map = {t.id: t.title for t in all_tasks}
+        task_status_map = {t.id: t.status for t in all_tasks}
+
+        # 既存ログのtask_nameバックフィル（タスク削除後も名前を表示するため）
+        backfilled = self._study_log_service.backfill_task_names(task_name_map)
+        if backfilled > 0:
+            all_logs = self._study_log_service.get_all_logs()
+
         entries = [
             StudyLogEntry(
                 study_date=log.study_date,
-                task_name=task_name_map.get(log.task_id, log.task_id),
+                task_name=task_name_map.get(log.task_id, log.task_name or log.task_id),
                 duration_minutes=log.duration_minutes,
                 memo=log.memo,
+                task_status=self._resolve_task_status(log.task_id, task_status_map),
             )
             for log in sorted(all_logs, key=lambda x: x.study_date, reverse=True)
         ]
         self._log_table.set_entries(entries)
 
-        # 目標別統計カードの再構築
-        self._clear_goal_cards()
-
+        # 目標別統計（目標データ）
+        goal_display_data = []
         for goal in goals:
             tasks = self._task_service.get_tasks_for_goal(goal.id)
             task_ids = [t.id for t in tasks]
             task_names = {t.id: t.title for t in tasks}
             goal_stats = self._study_log_service.get_goal_stats(goal.id, task_ids)
-
-            card = GoalStatsCard(
-                goal_name=goal.what,
-                goal_color=goal.color,
-                stats=goal_stats,
-                task_names=task_names,
+            goal_display_data.append(
+                GoalStatsDisplayData(
+                    name=goal.what,
+                    color=goal.color,
+                    stats=goal_stats,
+                    task_names=task_names,
+                )
             )
-            self._goal_cards.append(card)
-            self._scroll_layout.addWidget(card)
+        self._goal_stats_section.set_goal_data(goal_display_data)
 
-    def _clear_goal_cards(self) -> None:
-        """目標カードをクリアする."""
-        for card in self._goal_cards:
-            self._scroll_layout.removeWidget(card)
-            card.deleteLater()
-        self._goal_cards.clear()
+        # 読書統計データ
+        book_display_data = self._build_book_stats_data(task_name_map)
+        self._goal_stats_section.set_book_data(book_display_data)
+
+    def _build_book_stats_data(
+        self, task_name_map: dict[str, str]
+    ) -> list[GoalStatsDisplayData]:
+        """読書統計データを構築する.
+
+        Args:
+            task_name_map: タスクID→タスク名のマッピング.
+
+        Returns:
+            読書統計表示データのリスト.
+        """
+        if self._book_service is None:
+            return []
+
+        book_tasks = self._task_service.get_tasks_for_goal(BOOK_GANTT_GOAL_ID)
+        if not book_tasks:
+            return []
+
+        books = self._book_service.get_all_books()
+        book_name_map = {b.id: b.title for b in books}
+
+        # book_idでタスクをグループ化
+        tasks_by_book: dict[str, list] = defaultdict(list)
+        for task in book_tasks:
+            book_id = task.book_id or "unknown"
+            tasks_by_book[book_id].append(task)
+
+        # 書籍アクセントカラー
+        accent_color = "#CBA6F7"
+
+        result: list[GoalStatsDisplayData] = []
+        for book_id, tasks in tasks_by_book.items():
+            book_name = book_name_map.get(book_id, book_id)
+            task_ids = [t.id for t in tasks]
+            task_names = {t.id: task_name_map.get(t.id, t.title) for t in tasks}
+            book_stats = self._study_log_service.get_goal_stats(book_id, task_ids)
+            result.append(
+                GoalStatsDisplayData(
+                    name=book_name,
+                    color=accent_color,
+                    stats=book_stats,
+                    task_names=task_names,
+                )
+            )
+
+        return result
+
+    @staticmethod
+    def _resolve_task_status(
+        task_id: str,
+        task_status_map: dict[str, TaskStatus],
+    ) -> str:
+        """タスクIDからステータスラベルを解決する.
+
+        Args:
+            task_id: タスクID.
+            task_status_map: タスクID→ステータスのマップ.
+
+        Returns:
+            ステータスラベル文字列.
+        """
+        if task_id in task_status_map:
+            status = task_status_map[task_id]
+            return _TASK_STATUS_LABELS.get(status, status.value)
+        return _DELETED_STATUS_LABEL
 
     def on_theme_changed(self) -> None:
         """テーマ変更通知ハンドラ."""

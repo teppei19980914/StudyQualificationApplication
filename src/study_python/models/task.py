@@ -16,6 +16,9 @@ class TaskStatus(Enum):
     COMPLETED = "completed"
 
 
+BOOK_GANTT_GOAL_ID = "__books__"
+
+
 @dataclass
 class Task:
     """ガントチャートタスクモデル.

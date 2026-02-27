@@ -94,11 +94,15 @@ class TestDashboardPageCreation:
     def test_default_layout_has_9_widgets(self, dashboard_page: DashboardPage) -> None:
         assert len(dashboard_page._widget_frames) == 9
 
+    def test_milestone_button_in_header(self, dashboard_page: DashboardPage) -> None:
+        assert dashboard_page._milestone_button is not None
+        assert "\U0001f3c6" in dashboard_page._milestone_button.text()
+
     def test_edit_mode_off_by_default(self, dashboard_page: DashboardPage) -> None:
         assert dashboard_page._edit_mode is False
 
-    def test_add_button_hidden_by_default(self, dashboard_page: DashboardPage) -> None:
-        assert dashboard_page._add_widget_button.isHidden()
+    def test_palette_hidden_by_default(self, dashboard_page: DashboardPage) -> None:
+        assert dashboard_page._palette_panel.isHidden()
 
 
 class TestDashboardPageEditMode:
@@ -107,13 +111,13 @@ class TestDashboardPageEditMode:
     def test_toggle_edit_mode_on(self, dashboard_page: DashboardPage) -> None:
         dashboard_page._toggle_edit_mode()
         assert dashboard_page._edit_mode is True
-        assert not dashboard_page._add_widget_button.isHidden()
+        assert not dashboard_page._palette_panel.isHidden()
 
     def test_toggle_edit_mode_off(self, dashboard_page: DashboardPage) -> None:
         dashboard_page._toggle_edit_mode()
         dashboard_page._toggle_edit_mode()
         assert dashboard_page._edit_mode is False
-        assert dashboard_page._add_widget_button.isHidden()
+        assert dashboard_page._palette_panel.isHidden()
 
     def test_edit_mode_shows_headers(self, dashboard_page: DashboardPage) -> None:
         dashboard_page._toggle_edit_mode()
@@ -151,15 +155,15 @@ class TestDashboardPageWidgetResize:
     """ウィジェットリサイズのテスト."""
 
     def test_resize_resizable_widget(self, dashboard_page: DashboardPage) -> None:
-        weekly_idx = None
+        resizable_idx = None
         for i, config in enumerate(dashboard_page._current_layout):
-            if config.widget_type == "weekly_comparison":
-                weekly_idx = i
+            if config.widget_type == "personal_record":
+                resizable_idx = i
                 break
-        assert weekly_idx is not None
-        original_span = dashboard_page._current_layout[weekly_idx].column_span
-        dashboard_page._on_widget_resized(weekly_idx)
-        new_span = dashboard_page._current_layout[weekly_idx].column_span
+        assert resizable_idx is not None
+        original_span = dashboard_page._current_layout[resizable_idx].column_span
+        dashboard_page._on_widget_resized(resizable_idx)
+        new_span = dashboard_page._current_layout[resizable_idx].column_span
         assert new_span != original_span
 
 
@@ -287,3 +291,57 @@ class TestDashboardPageDropIndex:
         dashboard_page.show()
         index = dashboard_page._calculate_drop_index(QPoint(0, 999999))
         assert index == len(dashboard_page._widget_frames) - 1
+
+
+class TestDashboardPagePalette:
+    """パレットパネルのテスト."""
+
+    def test_palette_shows_available_widgets(
+        self, dashboard_page: DashboardPage
+    ) -> None:
+        """削除後にパレットに利用可能なウィジェットが表示されることを確認する."""
+        dashboard_page._toggle_edit_mode()
+        dashboard_page._on_widget_removed(0)
+        items = dashboard_page._palette_panel.palette_items
+        assert len(items) == 1
+
+    def test_palette_drop_adds_widget(self, dashboard_page: DashboardPage) -> None:
+        """パレットからのドロップでウィジェットが追加されることを確認する."""
+        dashboard_page._toggle_edit_mode()
+        dashboard_page._on_widget_removed(0)
+        removed_type = "today_banner"
+        initial_count = len(dashboard_page._widget_frames)
+        dashboard_page._on_palette_drop(removed_type, 0)
+        assert len(dashboard_page._widget_frames) == initial_count + 1
+
+    def test_palette_drop_at_position(self, dashboard_page: DashboardPage) -> None:
+        """パレットからドロップした位置にウィジェットが挿入されることを確認する."""
+        dashboard_page._toggle_edit_mode()
+        dashboard_page._on_widget_removed(0)
+        removed_type = "today_banner"
+        dashboard_page._on_palette_drop(removed_type, 2)
+        assert dashboard_page._current_layout[2].widget_type == removed_type
+
+    def test_widget_removed_updates_palette(
+        self, dashboard_page: DashboardPage
+    ) -> None:
+        """ウィジェット削除後にパレットが更新されることを確認する."""
+        dashboard_page._toggle_edit_mode()
+        assert len(dashboard_page._palette_panel.palette_items) == 0
+        dashboard_page._on_widget_removed(0)
+        assert len(dashboard_page._palette_panel.palette_items) == 1
+
+    def test_palette_empty_when_all_placed(self, dashboard_page: DashboardPage) -> None:
+        """全ウィジェット配置時にパレットが空であることを確認する."""
+        dashboard_page._toggle_edit_mode()
+        assert len(dashboard_page._palette_panel.palette_items) == 0
+
+    def test_palette_updates_after_add(self, dashboard_page: DashboardPage) -> None:
+        """追加後にパレットからアイテムが消えることを確認する."""
+        dashboard_page._toggle_edit_mode()
+        dashboard_page._on_widget_removed(0)
+        dashboard_page._on_widget_removed(0)
+        assert len(dashboard_page._palette_panel.palette_items) == 2
+        first_type = dashboard_page._palette_panel.palette_items[0].widget_type
+        dashboard_page._on_palette_drop(first_type, 0)
+        assert len(dashboard_page._palette_panel.palette_items) == 1

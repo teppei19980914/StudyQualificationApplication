@@ -19,6 +19,7 @@ class StudyLog:
         duration_minutes: 学習時間（分単位）.
         id: 一意識別子.
         memo: メモ.
+        task_name: タスク名（記録時に保存、削除後も表示用）.
         created_at: 作成日時.
     """
 
@@ -27,6 +28,7 @@ class StudyLog:
     duration_minutes: int
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     memo: str = ""
+    task_name: str = ""
     created_at: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self) -> None:
@@ -57,6 +59,7 @@ class StudyLog:
         return {
             "id": self.id,
             "task_id": self.task_id,
+            "task_name": self.task_name,
             "study_date": self.study_date.isoformat(),
             "duration_minutes": self.duration_minutes,
             "memo": self.memo,
@@ -79,5 +82,6 @@ class StudyLog:
             study_date=date.fromisoformat(str(data["study_date"])),
             duration_minutes=int(data["duration_minutes"]),
             memo=str(data.get("memo", "")),
+            task_name=str(data.get("task_name", "")),
             created_at=datetime.fromisoformat(str(data["created_at"])),
         )

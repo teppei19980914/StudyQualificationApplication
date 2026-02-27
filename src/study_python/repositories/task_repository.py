@@ -48,6 +48,19 @@ class TaskRepository:
         filtered = [t for t in tasks if t.goal_id == goal_id]
         return sorted(filtered, key=lambda t: t.order)
 
+    def get_by_book_id(self, book_id: str) -> list[Task]:
+        """Book IDでTaskをフィルタ取得する.
+
+        Args:
+            book_id: フィルタするBookのID.
+
+        Returns:
+            該当するTaskのリスト（order順）.
+        """
+        tasks = self.get_all()
+        filtered = [t for t in tasks if t.book_id == book_id]
+        return sorted(filtered, key=lambda t: t.order)
+
     def get_by_id(self, task_id: str) -> Task | None:
         """IDでTaskを取得する.
 

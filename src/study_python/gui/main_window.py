@@ -117,6 +117,7 @@ class MainWindow(QMainWindow):
             self._task_service,
             self._study_log_service,
             self._theme_manager,
+            book_service=self._book_service,
         )
         self._stack.addWidget(self._dashboard_page)
         self._stack.addWidget(self._goal_page)

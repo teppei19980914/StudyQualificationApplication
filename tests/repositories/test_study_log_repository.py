@@ -126,6 +126,44 @@ class TestStudyLogRepositoryDelete:
         assert remaining[0].id == log2.id
 
 
+class TestStudyLogRepositoryUpdate:
+    """updateメソッドのテスト."""
+
+    def test_update_existing(self, repo):
+        log = _make_log(memo="before")
+        repo.add(log)
+        log.memo = "after"
+        assert repo.update(log) is True
+        loaded = repo.get_all()[0]
+        assert loaded.memo == "after"
+
+    def test_update_nonexistent_returns_false(self, repo):
+        log = _make_log()
+        assert repo.update(log) is False
+
+    def test_update_preserves_others(self, repo):
+        log1 = _make_log(duration_minutes=30)
+        log2 = _make_log(duration_minutes=60)
+        repo.add(log1)
+        repo.add(log2)
+        log1.memo = "updated"
+        repo.update(log1)
+        logs = repo.get_all()
+        assert len(logs) == 2
+        updated = next(log for log in logs if log.id == log1.id)
+        other = next(log for log in logs if log.id == log2.id)
+        assert updated.memo == "updated"
+        assert other.duration_minutes == 60
+
+    def test_update_task_name(self, repo):
+        log = _make_log(task_name="")
+        repo.add(log)
+        log.task_name = "Udemy学習"
+        repo.update(log)
+        loaded = repo.get_all()[0]
+        assert loaded.task_name == "Udemy学習"
+
+
 class TestStudyLogRepositoryDeleteByTaskId:
     """delete_by_task_idメソッドのテスト."""
 

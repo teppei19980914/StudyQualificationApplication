@@ -120,7 +120,7 @@ class TestGetLayout:
         self, service: DashboardLayoutService, settings_path: Path
     ) -> None:
         saved = [
-            {"widget_type": "today_banner", "column_span": 1},
+            {"widget_type": "today_banner", "column_span": 3},
         ]
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(
@@ -172,14 +172,14 @@ class TestSaveLayout:
         layout = [
             DashboardWidgetConfig("today_banner", 2),
             DashboardWidgetConfig("streak_card", 1),
-            DashboardWidgetConfig("weekly_comparison", 2),
+            DashboardWidgetConfig("bookshelf", 2),
         ]
         service.save_layout(layout)
         loaded = service.get_layout()
         assert len(loaded) == 3
         assert loaded[0].widget_type == "today_banner"
         assert loaded[1].widget_type == "streak_card"
-        assert loaded[2].widget_type == "weekly_comparison"
+        assert loaded[2].widget_type == "bookshelf"
         assert loaded[2].column_span == 2
 
 
@@ -320,34 +320,34 @@ class TestResizeWidget:
     """resize_widgetのテスト."""
 
     def test_resize_toggles_span(self, service: DashboardLayoutService) -> None:
-        layout = [DashboardWidgetConfig("weekly_comparison", 1)]
+        layout = [DashboardWidgetConfig("bookshelf", 1)]
         result = service.resize_widget(layout, 0)
         assert result[0].column_span == 2
 
     def test_resize_cycles_back(self, service: DashboardLayoutService) -> None:
-        layout = [DashboardWidgetConfig("weekly_comparison", 2)]
+        layout = [DashboardWidgetConfig("bookshelf", 2)]
         result = service.resize_widget(layout, 0)
         assert result[0].column_span == 1
 
-    def test_resize_single_span_widget_unchanged(
+    def test_resize_unknown_widget_unchanged(
         self, service: DashboardLayoutService
     ) -> None:
-        layout = [DashboardWidgetConfig("streak_card", 1)]
+        layout = [DashboardWidgetConfig("unknown_widget", 1)]
         result = service.resize_widget(layout, 0)
         assert result[0].column_span == 1
 
     def test_resize_invalid_index(self, service: DashboardLayoutService) -> None:
-        layout = [DashboardWidgetConfig("weekly_comparison", 1)]
+        layout = [DashboardWidgetConfig("bookshelf", 1)]
         result = service.resize_widget(layout, 5)
         assert result[0].column_span == 1
 
     def test_resize_negative_index(self, service: DashboardLayoutService) -> None:
-        layout = [DashboardWidgetConfig("weekly_comparison", 1)]
+        layout = [DashboardWidgetConfig("bookshelf", 1)]
         result = service.resize_widget(layout, -1)
         assert result[0].column_span == 1
 
     def test_does_not_mutate_original(self, service: DashboardLayoutService) -> None:
-        layout = [DashboardWidgetConfig("weekly_comparison", 1)]
+        layout = [DashboardWidgetConfig("bookshelf", 1)]
         service.resize_widget(layout, 0)
         assert layout[0].column_span == 1
 
