@@ -63,6 +63,11 @@ class TestMainWindow:
         window._on_page_changed(4)
         assert window._stack.currentIndex() == 4
 
+    def test_has_notification_service(self, qtbot, tmp_path: Path):
+        window = MainWindow(data_dir=tmp_path)
+        qtbot.addWidget(window)
+        assert window._notification_service is not None
+
     def test_dashboard_page_refresh_on_switch(self, qtbot, tmp_path: Path):
         window = MainWindow(data_dir=tmp_path)
         qtbot.addWidget(window)

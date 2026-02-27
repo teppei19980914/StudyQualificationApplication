@@ -23,6 +23,7 @@ from study_python.gui.widgets.goal_stats_section import (
     GoalStatsSection,
 )
 from study_python.gui.widgets.milestone_button import MilestoneButton
+from study_python.gui.widgets.notification_button import NotificationButton
 from study_python.gui.widgets.personal_record_card import PersonalRecordCard
 from study_python.gui.widgets.study_log_table import StudyLogEntry, StudyLogTable
 from study_python.gui.widgets.today_study_banner import TodayStudyBanner
@@ -30,6 +31,7 @@ from study_python.models.task import BOOK_GANTT_GOAL_ID, TaskStatus
 from study_python.services.book_service import BookService
 from study_python.services.goal_service import GoalService
 from study_python.services.motivation_calculator import MotivationCalculator
+from study_python.services.notification_service import NotificationService
 from study_python.services.study_log_service import StudyLogService
 from study_python.services.study_stats_calculator import (
     ActivityPeriodType,
@@ -114,6 +116,7 @@ class StatsPage(QWidget):
         study_log_service: StudyLogService,
         theme_manager: ThemeManager,
         book_service: BookService | None = None,
+        notification_service: NotificationService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """StatsPageを初期化する.
@@ -124,6 +127,7 @@ class StatsPage(QWidget):
             study_log_service: StudyLogService.
             theme_manager: テーママネージャ.
             book_service: BookService（読書統計用、省略可）.
+            notification_service: 通知サービス.
             parent: 親ウィジェット.
         """
         super().__init__(parent)
@@ -132,6 +136,7 @@ class StatsPage(QWidget):
         self._study_log_service = study_log_service
         self._theme_manager = theme_manager
         self._book_service = book_service
+        self._notification_service = notification_service
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -160,6 +165,11 @@ class StatsPage(QWidget):
 
         self._milestone_button = MilestoneButton(self._theme_manager)
         header_layout.addWidget(self._milestone_button)
+
+        self._notification_button = NotificationButton(
+            self._theme_manager, self._notification_service
+        )
+        header_layout.addWidget(self._notification_button)
 
         container_layout.addLayout(header_layout)
 
@@ -197,7 +207,7 @@ class StatsPage(QWidget):
         self._personal_record_card = PersonalRecordCard(self._theme_manager)
         container_layout.addWidget(self._personal_record_card)
 
-        # 学習継続率
+        # 学習実施率
         self._consistency_card = ConsistencyCard(self._theme_manager)
         container_layout.addWidget(self._consistency_card)
 
@@ -250,6 +260,13 @@ class StatsPage(QWidget):
             all_logs, streak_data.current_streak
         )
         self._milestone_button.set_data(milestone_data)
+
+        if self._notification_service is not None:
+            self._notification_service.check_and_create_achievement_notifications(
+                milestone_data
+            )
+            unread = self._notification_service.get_unread_count()
+            self._notification_button.update_badge(unread)
 
         record_data = motivation.calculate_personal_records(all_logs)
         self._personal_record_card.set_data(record_data)

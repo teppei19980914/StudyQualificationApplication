@@ -1,4 +1,4 @@
-"""ConsistencyCardのテスト."""
+"""ConsistencyCard（学習実施率カード）のテスト."""
 
 from pathlib import Path
 
@@ -15,7 +15,7 @@ def theme_manager(tmp_path: Path) -> ThemeManager:
 
 
 class TestConsistencyCard:
-    """ConsistencyCardのテスト."""
+    """ConsistencyCard（学習実施率カード）のテスト."""
 
     def test_create_widget(self, qtbot, theme_manager):
         card = ConsistencyCard(theme_manager)
@@ -35,12 +35,14 @@ class TestConsistencyCard:
     def test_initial_empty_display(self, qtbot, theme_manager):
         card = ConsistencyCard(theme_manager)
         qtbot.addWidget(card)
+        assert "0%" in card._week_label.text()
         assert "0/0\u65e5" in card._week_label.text()
+        assert "0%" in card._month_label.text()
         assert "0/0\u65e5" in card._month_label.text()
         assert "0%" in card._overall_label.text()
 
     def test_set_data_high_rate(self, qtbot, theme_manager):
-        """高継続率 (80%以上) の場合."""
+        """高実施率 (80%以上) の場合."""
         card = ConsistencyCard(theme_manager)
         qtbot.addWidget(card)
 
@@ -56,7 +58,9 @@ class TestConsistencyCard:
         card.set_data(data)
 
         assert card._data is not None
+        assert "86%" in card._week_label.text()
         assert "6/7\u65e5" in card._week_label.text()
+        assert "89%" in card._month_label.text()
         assert "25/28\u65e5" in card._month_label.text()
         assert "85%" in card._overall_label.text()
         assert "85/100\u65e5" in card._overall_label.text()
@@ -64,7 +68,7 @@ class TestConsistencyCard:
         assert "#A6E3A1" in card._overall_label.styleSheet()
 
     def test_set_data_medium_rate(self, qtbot, theme_manager):
-        """中継続率 (50-80%) の場合."""
+        """中実施率 (50-80%) の場合."""
         card = ConsistencyCard(theme_manager)
         qtbot.addWidget(card)
 
@@ -79,13 +83,16 @@ class TestConsistencyCard:
         )
         card.set_data(data)
 
+        assert "60%" in card._week_label.text()
         assert "3/5\u65e5" in card._week_label.text()
+        assert "54%" in card._month_label.text()
+        assert "15/28\u65e5" in card._month_label.text()
         assert "60%" in card._overall_label.text()
         # warning色が使われる
         assert "#F9E2AF" in card._overall_label.styleSheet()
 
     def test_set_data_low_rate(self, qtbot, theme_manager):
-        """低継続率 (50%未満) の場合."""
+        """低実施率 (50%未満) の場合."""
         card = ConsistencyCard(theme_manager)
         qtbot.addWidget(card)
 
@@ -100,7 +107,10 @@ class TestConsistencyCard:
         )
         card.set_data(data)
 
+        assert "20%" in card._week_label.text()
         assert "1/5\u65e5" in card._week_label.text()
+        assert "18%" in card._month_label.text()
+        assert "5/28\u65e5" in card._month_label.text()
         assert "20%" in card._overall_label.text()
         # error色が使われる
         assert "#F38BA8" in card._overall_label.styleSheet()
@@ -121,7 +131,9 @@ class TestConsistencyCard:
         )
         card.set_data(data)
 
+        assert "0%" in card._week_label.text()
         assert "0/3\u65e5" in card._week_label.text()
+        assert "0%" in card._month_label.text()
         assert "0/15\u65e5" in card._month_label.text()
         assert "0%" in card._overall_label.text()
 

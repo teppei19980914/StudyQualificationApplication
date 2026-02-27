@@ -17,9 +17,11 @@ from study_python.gui.widgets.goal_stats_section import (
 from study_python.models.goal import WhenType
 from study_python.repositories.goal_repository import GoalRepository
 from study_python.repositories.json_storage import JsonStorage
+from study_python.repositories.notification_repository import NotificationRepository
 from study_python.repositories.study_log_repository import StudyLogRepository
 from study_python.repositories.task_repository import TaskRepository
 from study_python.services.goal_service import GoalService
+from study_python.services.notification_service import NotificationService
 from study_python.services.study_log_service import (
     GoalStudyStats,
     StudyLogService,
@@ -40,7 +42,16 @@ def stats_services(tmp_path: Path):
     task_service = TaskService(task_repo)
     study_log_service = StudyLogService(log_repo)
     theme_manager = ThemeManager(tmp_path / "settings.json")
-    return goal_service, task_service, study_log_service, theme_manager
+    notification_storage = JsonStorage(tmp_path / "notifications.json")
+    notification_repo = NotificationRepository(notification_storage)
+    notification_service = NotificationService(notification_repo)
+    return (
+        goal_service,
+        task_service,
+        study_log_service,
+        theme_manager,
+        notification_service,
+    )
 
 
 class TestSummaryCard:
@@ -107,14 +118,14 @@ class TestStatsPage:
     """StatsPageのテスト."""
 
     def test_create_page(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         assert page is not None
 
     def test_refresh_empty(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._total_time_card._value_label.text() == "0min"
@@ -122,7 +133,7 @@ class TestStatsPage:
         assert page._goal_count_card._value_label.text() == "0個"
 
     def test_refresh_with_data(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         # データ作成
         goal = gs.create_goal(
             why="test",
@@ -140,7 +151,7 @@ class TestStatsPage:
         sls.add_study_log(task.id, date(2026, 3, 1), 60)
         sls.add_study_log(task.id, date(2026, 3, 2), 90)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._total_time_card._value_label.text() == "2h 30min"
@@ -149,8 +160,8 @@ class TestStatsPage:
         assert len(page._goal_stats_section._cards) == 1
 
     def test_refresh_clears_old_cards(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
 
         # 1回目のリフレッシュ
@@ -169,13 +180,13 @@ class TestStatsPage:
         assert len(page._goal_stats_section._cards) == 1
 
     def test_theme_changed(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.on_theme_changed()  # エラーなく実行
 
     def test_hours_format_over_1_hour(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -191,13 +202,13 @@ class TestStatsPage:
         )
         sls.add_study_log(task.id, date(2026, 3, 1), 75)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._total_time_card._value_label.text() == "1h 15min"
 
     def test_minutes_only_format(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -213,13 +224,13 @@ class TestStatsPage:
         )
         sls.add_study_log(task.id, date(2026, 3, 1), 45)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._total_time_card._value_label.text() == "45min"
 
     def test_refresh_populates_activity_chart_section(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -235,13 +246,13 @@ class TestStatsPage:
         )
         sls.add_study_log(task.id, date.today(), 60)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert len(page._activity_chart_section._all_data) == 4
 
     def test_refresh_populates_log_table(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -258,7 +269,7 @@ class TestStatsPage:
         sls.add_study_log(task.id, date(2026, 3, 1), 60, "メモA")
         sls.add_study_log(task.id, date(2026, 3, 2), 30, "メモB")
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._log_table._table.rowCount() == 2
@@ -270,7 +281,7 @@ class TestStatsPage:
 
     def test_refresh_shows_deleted_status(self, qtbot, stats_services):
         """タスク削除後にステータスが「削除済み」と表示される."""
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -287,7 +298,7 @@ class TestStatsPage:
         sls.add_study_log(task.id, date(2026, 3, 1), 60, task_name="削除対象タスク")
         ts.delete_task(task.id)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._log_table._table.rowCount() == 1
@@ -296,7 +307,7 @@ class TestStatsPage:
 
     def test_refresh_uses_stored_task_name_when_deleted(self, qtbot, stats_services):
         """タスク削除後に保存済みtask_nameが表示される."""
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -313,7 +324,7 @@ class TestStatsPage:
         sls.add_study_log(task.id, date(2026, 3, 1), 30, task_name="保存テスト")
         ts.delete_task(task.id)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         # UUID ではなく保存済みタスク名が表示される
@@ -321,7 +332,7 @@ class TestStatsPage:
 
     def test_refresh_backfills_task_name_for_old_logs(self, qtbot, stats_services):
         """task_nameが空の既存ログにタスク名がバックフィルされる."""
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -338,7 +349,7 @@ class TestStatsPage:
         # task_name未設定で記録（旧バージョンのログを模倣）
         sls.add_study_log(task.id, date(2026, 3, 1), 30)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         # バックフィルされてタスク名が表示される
@@ -346,7 +357,7 @@ class TestStatsPage:
 
     def test_refresh_backfill_then_delete_shows_name(self, qtbot, stats_services):
         """バックフィル後にタスクを削除してもタスク名が表示される."""
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -363,7 +374,7 @@ class TestStatsPage:
         # task_name未設定で記録
         sls.add_study_log(task.id, date(2026, 3, 1), 30)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         # 1回目のrefreshでバックフィル
         page.refresh()
@@ -379,7 +390,7 @@ class TestStatsPage:
 
     def test_refresh_shows_task_status_labels(self, qtbot, stats_services):
         """各ステータスのラベルが正しく表示される."""
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -397,21 +408,21 @@ class TestStatsPage:
         # 進捗率を変更（ステータスは自動決定される）
         ts.update_progress(task.id, 50)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._log_table._table.item(0, 2).text() == "実施中"
 
     def test_refresh_empty_chart_and_table(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert len(page._activity_chart_section._all_data) == 4
         assert page._log_table._table.rowCount() == 0
 
     def test_refresh_populates_today_banner(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -427,7 +438,7 @@ class TestStatsPage:
         )
         sls.add_study_log(task.id, date.today(), 45)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._today_banner._data is not None
@@ -435,21 +446,21 @@ class TestStatsPage:
         assert page._today_banner._data.total_minutes == 45
 
     def test_refresh_populates_streak_card(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._streak_card._value_label.text() == "0日"
 
     def test_refresh_populates_milestone_button(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._milestone_button._data is not None
 
     def test_refresh_with_study_today_shows_streak(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -469,29 +480,29 @@ class TestStatsPage:
         sls.add_study_log(task.id, date.today(), 30)
         sls.add_study_log(task.id, date.today() - timedelta(days=1), 30)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._streak_card._value_label.text() == "2日"
 
     def test_refresh_populates_personal_record_card(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._personal_record_card._data is not None
         assert page._personal_record_card._data.total_study_days == 0
 
     def test_refresh_populates_consistency_card(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
         assert page._consistency_card._data is not None
         assert page._consistency_card._data.overall_rate == 0.0
 
     def test_refresh_with_data_populates_new_cards(self, qtbot, stats_services):
-        gs, ts, sls, tm = stats_services
+        gs, ts, sls, tm, ns = stats_services
         goal = gs.create_goal(
             why="test",
             when_target="2026-06-30",
@@ -507,7 +518,7 @@ class TestStatsPage:
         )
         sls.add_study_log(task.id, date.today(), 60)
 
-        page = StatsPage(gs, ts, sls, tm)
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         page.refresh()
 
@@ -516,30 +527,38 @@ class TestStatsPage:
         assert page._personal_record_card._data.best_day_minutes == 60
         assert page._personal_record_card._data.total_study_days == 1
 
-        # 継続率カードにデータが入っている
+        # 実施率カードにデータが入っている
         assert page._consistency_card._data is not None
         assert page._consistency_card._data.overall_study_days == 1
 
     def test_milestone_button_in_header(self, qtbot, stats_services):
         """実績ボタンがヘッダーに存在する."""
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         assert page._milestone_button is not None
         assert "\U0001f3c6" in page._milestone_button.text()
 
+    def test_notification_button_in_header(self, qtbot, stats_services):
+        """通知ボタンがヘッダーに存在する."""
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
+        qtbot.addWidget(page)
+        assert page._notification_button is not None
+        assert "\U0001f514" in page._notification_button.text()
+
     def test_goal_stats_section_exists(self, qtbot, stats_services):
         """GoalStatsSectionが存在する."""
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         assert page._goal_stats_section is not None
         assert page._goal_stats_section._combo.count() == 2
 
     def test_build_book_stats_data_without_book_service(self, qtbot, stats_services):
         """book_serviceなしの場合は空リストを返す."""
-        gs, ts, sls, tm = stats_services
-        page = StatsPage(gs, ts, sls, tm)
+        gs, ts, sls, tm, ns = stats_services
+        page = StatsPage(gs, ts, sls, tm, notification_service=ns)
         qtbot.addWidget(page)
         result = page._build_book_stats_data({})
         assert result == []

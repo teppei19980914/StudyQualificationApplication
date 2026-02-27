@@ -105,7 +105,7 @@ class DashboardLayoutService:
         ),
         "consistency": WidgetMetadata(
             widget_type="consistency",
-            display_name="\u5b66\u7fd2\u306e\u7d99\u7d9a\u7387",
+            display_name="学習の実施率",
             icon="\U0001f4ca",
             default_span=1,
             allowed_spans=[1, 2],

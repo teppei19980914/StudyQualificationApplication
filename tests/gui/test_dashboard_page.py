@@ -9,6 +9,7 @@ from study_python.gui.pages.dashboard_page import DashboardPage
 from study_python.gui.theme.theme_manager import ThemeManager
 from study_python.repositories.goal_repository import GoalRepository
 from study_python.repositories.json_storage import JsonStorage
+from study_python.repositories.notification_repository import NotificationRepository
 from study_python.repositories.study_log_repository import StudyLogRepository
 from study_python.repositories.task_repository import TaskRepository
 from study_python.services.dashboard_layout_service import (
@@ -16,6 +17,7 @@ from study_python.services.dashboard_layout_service import (
     DashboardWidgetConfig,
 )
 from study_python.services.goal_service import GoalService
+from study_python.services.notification_service import NotificationService
 from study_python.services.study_log_service import StudyLogService
 from study_python.services.task_service import TaskService
 
@@ -65,6 +67,14 @@ def study_log_service(tmp_path: Path) -> StudyLogService:
 
 
 @pytest.fixture
+def notification_service(tmp_path: Path) -> NotificationService:
+    """NotificationService."""
+    storage = JsonStorage(tmp_path / "notifications.json")
+    repo = NotificationRepository(storage)
+    return NotificationService(repo)
+
+
+@pytest.fixture
 def dashboard_page(
     qtbot,
     goal_service: GoalService,
@@ -72,6 +82,7 @@ def dashboard_page(
     study_log_service: StudyLogService,
     theme_manager: ThemeManager,
     layout_service: DashboardLayoutService,
+    notification_service: NotificationService,
 ) -> DashboardPage:
     """DashboardPageインスタンス."""
     page = DashboardPage(
@@ -80,6 +91,7 @@ def dashboard_page(
         study_log_service=study_log_service,
         theme_manager=theme_manager,
         layout_service=layout_service,
+        notification_service=notification_service,
     )
     qtbot.addWidget(page)
     return page
@@ -97,6 +109,10 @@ class TestDashboardPageCreation:
     def test_milestone_button_in_header(self, dashboard_page: DashboardPage) -> None:
         assert dashboard_page._milestone_button is not None
         assert "\U0001f3c6" in dashboard_page._milestone_button.text()
+
+    def test_notification_button_in_header(self, dashboard_page: DashboardPage) -> None:
+        assert dashboard_page._notification_button is not None
+        assert "\U0001f514" in dashboard_page._notification_button.text()
 
     def test_edit_mode_off_by_default(self, dashboard_page: DashboardPage) -> None:
         assert dashboard_page._edit_mode is False

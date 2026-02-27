@@ -27,6 +27,7 @@ from study_python.gui.widgets.dashboard_widget_frame import (
     DashboardWidgetFrame,
 )
 from study_python.gui.widgets.milestone_button import MilestoneButton
+from study_python.gui.widgets.notification_button import NotificationButton
 from study_python.gui.widgets.personal_record_card import PersonalRecordCard
 from study_python.gui.widgets.today_study_banner import TodayStudyBanner
 from study_python.gui.widgets.widget_palette_panel import WidgetPalettePanel
@@ -37,6 +38,7 @@ from study_python.services.dashboard_layout_service import (
 )
 from study_python.services.goal_service import GoalService
 from study_python.services.motivation_calculator import MotivationCalculator
+from study_python.services.notification_service import NotificationService
 from study_python.services.study_log_service import StudyLogService
 from study_python.services.study_stats_calculator import (
     ActivityPeriodType,
@@ -143,6 +145,7 @@ class DashboardPage(QWidget):
         theme_manager: ThemeManager,
         layout_service: DashboardLayoutService,
         book_service: BookService | None = None,
+        notification_service: NotificationService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """DashboardPageを初期化する.
@@ -154,6 +157,7 @@ class DashboardPage(QWidget):
             theme_manager: テーママネージャ.
             layout_service: レイアウトサービス.
             book_service: 書籍サービス.
+            notification_service: 通知サービス.
             parent: 親ウィジェット.
         """
         super().__init__(parent)
@@ -163,6 +167,7 @@ class DashboardPage(QWidget):
         self._theme_manager = theme_manager
         self._layout_service = layout_service
         self._book_service = book_service
+        self._notification_service = notification_service
         self._edit_mode = False
         self._current_layout: list[DashboardWidgetConfig] = []
         self._widget_frames: list[DashboardWidgetFrame] = []
@@ -187,6 +192,11 @@ class DashboardPage(QWidget):
 
         self._milestone_button = MilestoneButton(self._theme_manager)
         header_layout.addWidget(self._milestone_button)
+
+        self._notification_button = NotificationButton(
+            self._theme_manager, self._notification_service
+        )
+        header_layout.addWidget(self._notification_button)
 
         self._edit_button = QPushButton("\u270f\ufe0f \u7de8\u96c6")
         self._edit_button.setObjectName("secondary_button")
@@ -381,6 +391,13 @@ class DashboardPage(QWidget):
             all_logs, streak_data.current_streak
         )
         self._milestone_button.set_data(milestone_data)
+
+        if self._notification_service is not None:
+            self._notification_service.check_and_create_achievement_notifications(
+                milestone_data
+            )
+            unread = self._notification_service.get_unread_count()
+            self._notification_button.update_badge(unread)
 
         bookshelf = self._active_widgets.get("bookshelf")
         if bookshelf is not None and self._book_service is not None:

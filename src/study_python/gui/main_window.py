@@ -22,11 +22,13 @@ from study_python.gui.widgets.sidebar import Sidebar
 from study_python.repositories.book_repository import BookRepository
 from study_python.repositories.goal_repository import GoalRepository
 from study_python.repositories.json_storage import JsonStorage
+from study_python.repositories.notification_repository import NotificationRepository
 from study_python.repositories.study_log_repository import StudyLogRepository
 from study_python.repositories.task_repository import TaskRepository
 from study_python.services.book_service import BookService
 from study_python.services.dashboard_layout_service import DashboardLayoutService
 from study_python.services.goal_service import GoalService
+from study_python.services.notification_service import NotificationService
 from study_python.services.study_log_service import StudyLogService
 from study_python.services.task_service import TaskService
 
@@ -65,6 +67,13 @@ class MainWindow(QMainWindow):
         book_storage = JsonStorage(self._data_dir / "books.json")
         book_repo = BookRepository(book_storage)
         self._book_service = BookService(book_repo, task_repo)
+        notification_storage = JsonStorage(self._data_dir / "notifications.json")
+        notification_repo = NotificationRepository(notification_storage)
+        self._notification_service = NotificationService(
+            notification_repo,
+            system_notifications_path=self._data_dir / "system_notifications.json",
+        )
+        self._notification_service.load_system_notifications()
 
     def _setup_theme(self) -> None:
         """テーママネージャを初期化する."""
@@ -99,6 +108,7 @@ class MainWindow(QMainWindow):
             self._theme_manager,
             self._layout_service,
             book_service=self._book_service,
+            notification_service=self._notification_service,
         )
         self._goal_page = GoalPage(self._goal_service, self._theme_manager)
         self._gantt_page = GanttPage(
@@ -118,6 +128,7 @@ class MainWindow(QMainWindow):
             self._study_log_service,
             self._theme_manager,
             book_service=self._book_service,
+            notification_service=self._notification_service,
         )
         self._stack.addWidget(self._dashboard_page)
         self._stack.addWidget(self._goal_page)

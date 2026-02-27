@@ -549,7 +549,7 @@ class TestCalculateConsistency:
         assert result.this_month_total == 15
 
     def test_overall_rate(self, calculator):
-        """全期間の継続率."""
+        """全期間の実施率."""
         today = date(2026, 2, 26)
         # 2/20から2/26の7日間中、3日学習
         logs = [

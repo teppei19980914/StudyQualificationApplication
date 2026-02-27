@@ -119,14 +119,14 @@ class PersonalRecordData:
 
 @dataclass
 class ConsistencyData:
-    """学習継続率データ.
+    """学習実施率データ.
 
     Attributes:
         this_week_days: 今週の学習日数 (0-7).
         this_week_total: 今週の経過曜日数 (1-7).
         this_month_days: 今月の学習日数.
         this_month_total: 今月の経過日数.
-        overall_rate: 全期間の継続率 (0.0-1.0).
+        overall_rate: 全期間の実施率 (0.0-1.0).
         overall_study_days: 全期間の学習日数.
         overall_total_days: 初学習日からの経過日数.
     """
@@ -150,7 +150,7 @@ class MotivationCalculator:
     """モチベーション関連の統計計算を行うクラス.
 
     StudyLogのリストからストリーク、今日の学習状況、
-    実績、自己ベスト、継続率データを生成する。
+    実績、自己ベスト、実施率データを生成する。
     """
 
     def calculate_streak(
@@ -425,14 +425,14 @@ class MotivationCalculator:
         logs: list[StudyLog],
         today: date | None = None,
     ) -> ConsistencyData:
-        """学習の継続率を計算する.
+        """学習の実施率を計算する.
 
         Args:
             logs: 学習ログのリスト.
             today: 基準日（デフォルト今日）.
 
         Returns:
-            学習継続率データ.
+            学習実施率データ.
         """
         if today is None:
             today = date.today()
