@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -28,6 +28,25 @@ _TYPE_ICONS: dict[NotificationType, str] = {
     NotificationType.SYSTEM: "\U0001f4e2",
     NotificationType.ACHIEVEMENT: "\u2728",
 }
+
+
+class _ClickableFrame(QFrame):
+    """クリック可能なQFrame.
+
+    Attributes:
+        clicked: クリック時に発火するシグナル.
+    """
+
+    clicked = Signal()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        """マウスクリック時にclickedシグナルを発火する.
+
+        Args:
+            event: マウスイベント.
+        """
+        super().mousePressEvent(event)
+        self.clicked.emit()
 
 
 class NotificationPopup(QDialog):
@@ -168,19 +187,26 @@ class NotificationPopup(QDialog):
         bg_hover = colors.get("bg_hover", "#45475A")
         text_muted = colors.get("text_muted", "#6C7086")
 
-        item = QFrame()
+        item = _ClickableFrame()
         item.setObjectName("notification_item")
+        item.setCursor(Qt.CursorShape.PointingHandCursor)
+        item.setProperty("notification_id", notification.id)
+        read_style = (
+            f"QFrame#notification_item {{ border: 1px solid {border}; "
+            f"border-radius: 8px; padding: 8px; }}"
+        )
+        unread_style = (
+            f"QFrame#notification_item {{ border: 1px solid {accent}; "
+            f"border-radius: 8px; padding: 8px; "
+            f"background-color: {bg_hover}; }}"
+        )
         if notification.is_read:
-            item.setStyleSheet(
-                f"QFrame#notification_item {{ border: 1px solid {border}; "
-                f"border-radius: 8px; padding: 8px; }}"
-            )
+            item.setStyleSheet(read_style)
         else:
-            item.setStyleSheet(
-                f"QFrame#notification_item {{ border: 1px solid {accent}; "
-                f"border-radius: 8px; padding: 8px; "
-                f"background-color: {bg_hover}; }}"
-            )
+            item.setStyleSheet(unread_style)
+        item.clicked.connect(
+            lambda n=notification: self._on_item_clicked(n)
+        )
 
         item_layout = QHBoxLayout(item)
         item_layout.setContentsMargins(8, 6, 8, 6)
@@ -221,6 +247,32 @@ class NotificationPopup(QDialog):
             item_layout.addWidget(dot)
 
         return item
+
+    def _on_item_clicked(self, notification: Notification) -> None:
+        """個別通知クリック時のハンドラ.
+
+        Args:
+            notification: クリックされた通知.
+        """
+        if not notification.is_read:
+            self._notification_service.mark_as_read(notification.id)
+        self._show_detail_dialog(notification)
+        self._rebuild_list()
+
+    def _show_detail_dialog(self, notification: Notification) -> None:
+        """通知詳細ダイアログを表示する.
+
+        Args:
+            notification: 表示する通知.
+        """
+        from study_python.gui.dialogs.notification_detail_dialog import (  # noqa: PLC0415
+            NotificationDetailDialog,
+        )
+
+        dialog = NotificationDetailDialog(
+            notification, self._theme_manager, parent=self
+        )
+        dialog.exec()
 
     def _on_mark_all_read(self) -> None:
         """全て既読ボタンのハンドラ."""
