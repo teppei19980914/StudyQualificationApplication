@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(C:/dev/flutter/bin/flutter.bat test)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\SF02512\\GitHub\\Public\\StudyPlannerFlutter\\lib\\services",
+      "C:\\Users\\SF02512\\GitHub\\Public\\StudyPlannerFlutter\\lib\\widgets\\navigation",
+      "C:\\Users\\SF02512\\GitHub\\Public\\StudyPlannerFlutter\\lib\\dialogs",
+      "C:\\Users\\SF02512\\GitHub\\Public\\StudyPlannerFlutter\\lib\\pages"
+    ]
+  }
+}
