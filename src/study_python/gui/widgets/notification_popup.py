@@ -204,9 +204,7 @@ class NotificationPopup(QDialog):
             item.setStyleSheet(read_style)
         else:
             item.setStyleSheet(unread_style)
-        item.clicked.connect(
-            lambda n=notification: self._on_item_clicked(n)
-        )
+        item.clicked.connect(lambda n=notification: self._on_item_clicked(n))
 
         item_layout = QHBoxLayout(item)
         item_layout.setContentsMargins(8, 6, 8, 6)

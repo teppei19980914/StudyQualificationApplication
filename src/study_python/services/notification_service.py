@@ -55,15 +55,59 @@ class NotificationService:
         self,
         repo: NotificationRepository,
         system_notifications_path: Path | None = None,
+        settings_path: Path | None = None,
     ) -> None:
         """NotificationServiceを初期化する.
 
         Args:
             repo: NotificationRepository.
             system_notifications_path: システム通知JSONファイルのパス.
+            settings_path: 設定ファイルのパス.
         """
         self._repo = repo
         self._system_notifications_path = system_notifications_path
+        self._settings_path = settings_path
+
+    @property
+    def notifications_enabled(self) -> bool:
+        """実績通知が有効かどうかを返す.
+
+        Returns:
+            通知が有効な場合True.
+        """
+        if self._settings_path is None:
+            return True
+        try:
+            if self._settings_path.exists():
+                data: dict[str, Any] = json.loads(
+                    self._settings_path.read_text(encoding="utf-8")
+                )
+                return bool(data.get("notifications_enabled", True))
+        except (json.JSONDecodeError, ValueError, OSError):
+            pass
+        return True
+
+    def set_notifications_enabled(self, enabled: bool) -> None:
+        """実績通知の有効/無効を設定する.
+
+        Args:
+            enabled: 通知を有効にする場合True.
+        """
+        if self._settings_path is None:
+            return
+        try:
+            self._settings_path.parent.mkdir(parents=True, exist_ok=True)
+            data: dict[str, Any] = {}
+            if self._settings_path.exists():
+                data = json.loads(self._settings_path.read_text(encoding="utf-8"))
+            data["notifications_enabled"] = enabled
+            self._settings_path.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.info(f"Notifications enabled: {enabled}")
+        except OSError as e:  # pragma: no cover
+            logger.error(f"Failed to save notification setting: {e}")
 
     def get_all_notifications(self) -> list[Notification]:
         """全通知を取得する（作成日時降順）.
@@ -115,6 +159,9 @@ class NotificationService:
         Returns:
             新しく作成された通知のリスト.
         """
+        if not self.notifications_enabled:
+            return []
+
         # MilestoneType → 現在の累計値
         current_values: dict[MilestoneType, float] = {
             MilestoneType.TOTAL_HOURS: milestone_data.total_hours,

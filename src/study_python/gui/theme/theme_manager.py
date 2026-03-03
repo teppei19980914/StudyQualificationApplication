@@ -111,6 +111,44 @@ QPushButton#sidebar_button:checked {{
     font-weight: 600;
 }}
 
+/* ===== Header Bar ===== */
+QWidget#header_bar {{
+    background-color: {colors["bg_secondary"]};
+    border-bottom: 1px solid {colors["border"]};
+}}
+
+QPushButton#hamburger_button {{
+    background: transparent;
+    font-size: 20px;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+    min-height: 0;
+    color: {colors["text_primary"]};
+}}
+
+QPushButton#hamburger_button:hover {{
+    background-color: {colors["bg_hover"]};
+}}
+
+QLabel#header_title {{
+    font-size: 16px;
+    font-weight: 600;
+    background: transparent;
+    color: {colors["text_primary"]};
+}}
+
+/* ===== Navigation Drawer ===== */
+QFrame#navigation_drawer {{
+    background-color: {colors["bg_secondary"]};
+    border-right: 1px solid {colors["border"]};
+}}
+
+QLabel#settings_theme_label {{
+    font-size: 14px;
+    color: {colors["text_secondary"]};
+}}
+
 /* ===== Cards ===== */
 QFrame#goal_card {{
     background-color: {colors["bg_card"]};

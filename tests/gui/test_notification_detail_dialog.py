@@ -85,7 +85,9 @@ class TestNotificationDetailDialog:
         """通知メッセージが表示される."""
         dialog = NotificationDetailDialog(system_notification, theme_manager)
         qtbot.addWidget(dialog)
-        assert dialog._message_label.text() == "2026年3月10日にメンテナンスを実施します。"
+        assert (
+            dialog._message_label.text() == "2026年3月10日にメンテナンスを実施します。"
+        )
 
     def test_shows_system_type_label(
         self,

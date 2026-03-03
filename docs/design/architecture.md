@@ -1,331 +1,721 @@
 # システムアーキテクチャ設計書
 
-更新日: 2026-02-27
+更新日: 2026-03-03
 
-## 概要
+## 変更履歴
 
-Study Qualification Applicationは、社会人の自己学習者向けPySide6 GUIアプリケーションである。
-複数の学習目標を3W1H（Why・When・What・How）で登録し、ガントチャートで進捗を視覚的に管理する。
-タスクごとの学習時間を手動入力・タイマー計測で記録し、統計ページで集計結果を確認できる。
-習慣化の後押し（ストリーク・今日の学習状況）と小さな達成感（実績）で自己研鑽の継続を支援する。
-過去の自分と今の自分を比較する「自己比較」機能（自己ベスト記録・学習実施率）により、実績の積み上がりを実感できる。
-学習アクティビティチャートでは年別/月別/週別/日別をプルダウンで動的に切替え、期間ごとの学習時間推移を可視化できる。
-カスタマイズ可能なダッシュボード（アプリ起動時のデフォルトページ）でユーザーが重要な情報を自由に配置・並べ替えできる。
-書籍を登録し、タスクと紐付けて読書管理を行い、読了時に要約・感想を蓄積してダッシュボードの本棚ウィジェットで可視化できる。
+| 日付 | 内容 |
+|------|------|
+| 2026-02-27 | 初版作成 |
+| 2026-03-03 | 全面改訂（MECE対応・通知設定・データ管理・ハンバーガーメニュー追加反映） |
 
-## ペルソナ
+---
+
+## 1. 概要
+
+### 1.1 プロジェクト概要
+
+Study Planner（Study Qualification Application）は、社会人の自己学習者向けPySide6デスクトップアプリケーションである。
+
+**コアコンセプト**: 「なぜやるのか」を見返してモチベーションを維持し、計画的に学習を進める。
+
+### 1.2 ペルソナ
 
 **田中太郎（32歳・ITエンジニア）**: 仕事をしながらAWS資格とTOEICの勉強を並行。帰宅後の限られた時間で計画的に学習したい。「なぜやるのか」を見返してモチベーションを維持し、ガントチャートで進捗を把握したい。
 
-## レイヤードアーキテクチャ
+### 1.3 主要機能一覧
+
+| # | 機能 | 概要 |
+|---|------|------|
+| 1 | 3W1H目標管理 | Why・When・What・Howで学習目標を登録・管理 |
+| 2 | ガントチャート | タスクの期間・進捗を視覚的に管理 |
+| 3 | 学習時間記録 | 手動入力・タイマー計測で学習時間を記録 |
+| 4 | 統計・分析 | 学習時間の集計・可視化・自己比較 |
+| 5 | 書籍管理 | 読書の進捗管理・読了レビュー蓄積 |
+| 6 | 通知・実績 | 累計実績の自動通知・モチベーション支援 |
+| 7 | ダッシュボード | カスタマイズ可能なウィジェットグリッド |
+| 8 | テーマ | ダーク/ライトモード切替 |
+| 9 | 設定 | 通知設定・データ管理・アプリ情報 |
+| 10 | ナビゲーション | ハンバーガーメニュー＋ドロワーによるページ遷移 |
+
+### 1.4 技術スタック
+
+| 項目 | 技術 |
+|------|------|
+| 言語 | Python 3.12+ |
+| GUIフレームワーク | PySide6 (Qt6) 6.7.0+ |
+| パッケージ管理 | uv |
+| リンター/フォーマッター | ruff |
+| 型チェック | mypy（strictモード） |
+| テスト | pytest + pytest-qt |
+| 祝日判定 | jpholiday 1.0.0+ |
+| データ永続化 | JSON ファイル |
+
+---
+
+## 2. アーキテクチャ
+
+### 2.1 レイヤードアーキテクチャ
 
 ```
-┌─────────────────────────────────────────┐
-│           GUI Layer (View)              │
-│  - PySide6ウィジェット                  │
-│  - イベントハンドラ                      │
-│  - 表示更新                              │
-└──────────────────┬──────────────────────┘
+┌─────────────────────────────────────────────┐
+│           GUI Layer (View)                  │
+│  - PySide6ウィジェット（Pages/Dialogs/      │
+│    Widgets）                                 │
+│  - イベントハンドラ（ボタンクリック等）       │
+│  - 表示更新・テーマ適用                      │
+└──────────────────┬──────────────────────────┘
                    │ 呼び出し
-┌──────────────────▼──────────────────────┐
-│         Service Layer (Logic)            │
-│  - ビジネスロジック                      │
-│  - バリデーション                        │
-│  - ユニットテスト対象                    │
-└──────────────────┬──────────────────────┘
+┌──────────────────▼──────────────────────────┐
+│         Service Layer (Logic)               │
+│  - ビジネスロジック（CRUD、バリデーション）   │
+│  - 統計計算（Calculator群）                  │
+│  - レイアウト・テーマ・通知管理              │
+│  ※ ユニットテスト対象                       │
+└──────────────────┬──────────────────────────┘
                    │ 呼び出し
-┌──────────────────▼──────────────────────┐
-│        Repository Layer (Data)           │
-│  - JSON永続化                            │
-│  - CRUD操作                              │
-└─────────────────────────────────────────┘
+┌──────────────────▼──────────────────────────┐
+│        Repository Layer (Data)              │
+│  - JSON永続化（JsonStorage）                 │
+│  - CRUD操作（各Repository）                  │
+└─────────────────────────────────────────────┘
 ```
 
-## データモデル
-
-### Goal（3W1H目標）
-
-| フィールド | 型 | 説明 |
-|-----------|-----|------|
-| id | str (UUID) | 一意識別子 |
-| why | str | 学習の動機・目的 |
-| when_target | str | 目標日 or 期間文字列 |
-| when_type | WhenType | "date" or "period" |
-| what | str | 学習対象 |
-| how | str | 学習方法 |
-| created_at | str (ISO8601) | 作成日時 |
-| updated_at | str (ISO8601) | 更新日時 |
-| color | str (HEX) | 表示色（自動割り当て） |
-
-### Task（ガントチャートタスク）
-
-| フィールド | 型 | 説明 |
-|-----------|-----|------|
-| id | str (UUID) | 一意識別子 |
-| goal_id | str (UUID) | 親Goalへの参照（書籍タスクは"__books__"） |
-| title | str | タスク名 |
-| start_date | date | 開始日 |
-| end_date | date | 終了日 |
-| status | TaskStatus | "not_started" / "in_progress" / "completed" |
-| progress | int (0-100) | 進捗率 |
-| memo | str | メモ |
-| book_id | str | 関連書籍ID（空文字で未設定） |
-| order | int | 表示順 |
-| created_at | str (ISO8601) | 作成日時 |
-| updated_at | str (ISO8601) | 更新日時 |
-
-### Book（書籍）
-
-| フィールド | 型 | 説明 |
-|-----------|-----|------|
-| id | str (UUID) | 一意識別子 |
-| title | str | 書籍名 |
-| status | BookStatus | "unread" / "reading" / "completed" |
-| summary | str | 要約（読了時に記入） |
-| impressions | str | 感想（読了時に記入） |
-| completed_date | date \| None | 読了日 |
-| created_at | str (ISO8601) | 作成日時 |
-| updated_at | str (ISO8601) | 更新日時 |
-
-### StudyLog（学習ログ）
-
-| フィールド | 型 | 説明 |
-|-----------|-----|------|
-| id | str (UUID) | 一意識別子 |
-| task_id | str (UUID) | 親Taskへの参照 |
-| study_date | date | 学習実施日 |
-| duration_minutes | int (>0) | 学習時間（分） |
-| memo | str | メモ |
-| created_at | str (ISO8601) | 作成日時 |
-
-### Notification（通知）
-
-| フィールド | 型 | 説明 |
-|-----------|-----|------|
-| id | str (UUID) | 一意識別子 |
-| notification_type | NotificationType | "system" / "achievement" |
-| title | str | 通知タイトル |
-| message | str | 通知メッセージ |
-| is_read | bool | 既読フラグ |
-| created_at | datetime (ISO8601) | 作成日時 |
-| dedup_key | str | 重複防止キー（例: "total_hours:100"） |
-
-## クラス構成
-
-### Models
-
-- `Goal` (dataclass): 3W1H目標データ。`to_dict()`/`from_dict()` でJSON変換。
-- `Task` (dataclass): タスクデータ。バリデーション付き（progress範囲、日付順序）。`BOOK_GANTT_GOAL_ID`定数で書籍タスクを識別。
-- `StudyLog` (dataclass): 学習ログデータ。バリデーション付き（duration_minutes > 0）。
-- `Book` (dataclass): 書籍データ。読了レビュー（summary, impressions）を含む。
-- `WhenType` (Enum): DATE / PERIOD
-- `TaskStatus` (Enum): NOT_STARTED / IN_PROGRESS / COMPLETED
-- `BookStatus` (Enum): UNREAD / READING / COMPLETED
-- `Notification` (dataclass): 通知データ。dedup_keyで実績通知の重複防止。`to_dict()`/`from_dict()` でJSON変換。
-- `NotificationType` (Enum): SYSTEM / ACHIEVEMENT
-
-### Repositories
-
-- `JsonStorage`: 汎用JSON読み書き。Pathベースでファイル操作。
-- `GoalRepository`: Goal CRUD。JsonStorageを利用。
-- `TaskRepository`: Task CRUD。goal_id・book_idでフィルタ可能。
-- `StudyLogRepository`: StudyLog CRUD。task_idでフィルタ可能。複数task_id一括取得対応。
-- `BookRepository`: Book CRUD。JsonStorageを利用。
-- `NotificationRepository`: Notification CRUD。dedup_keyチェック、既読管理（mark_as_read, mark_all_as_read）、未読数カウント。JsonStorageを利用。
-
-### Services
-
-- `GoalService`: Goal作成（バリデーション、色自動割り当て）、更新、削除（タスク連鎖削除）。
-- `TaskService`: Task CRUD、ステータス自動管理（進捗率に連動）。
-- `StudyLogService`: 学習ログCRUD、タスク/目標単位の統計集計（TaskStudyStats, GoalStudyStats）。
-- `GanttCalculator`: 日付→ピクセル変換、タイムライン範囲計算、バー座標計算。
-- `StudyStatsCalculator`: 学習ログの集計。日別（DailyStudyData, DailyActivityData）と期間別（ActivityChartData: 年別/月別/週別/日別）の棒グラフ描画用データ生成。
-- `MotivationCalculator`: モチベーション関連の統計計算（ストリーク、今日の学習、実績、自己ベスト記録、学習実施率）。
-- `BookService`: 書籍CRUD、読了記録、タスクbook_idクリア連鎖（書籍タスクは完全削除、参照タスクはbook_idクリア）。BookshelfDataでダッシュボード用集計。
-- `BookGanttService`: 書籍ガントチャート管理。書籍タスク取得、書籍進捗の自動同期（タスク進捗平均→書籍progress/status）。
-- `NotificationService`: 通知管理。実績通知の自動生成（MilestoneDataの累計値と閾値を比較、dedup_keyで重複防止）、システム通知の読込（system_notifications.json）、未読数取得、既読化。
-- `DashboardLayoutService`: ダッシュボードのレイアウト設定管理。ウィジェット登録簿（9種類）、配置の永続化・並べ替え・追加・削除・リサイズ。
-- `HolidayService`: 日本の祝日判定（jpholidayラッパー）。年単位キャッシュ付き。
-
-### GUI
-
-- `MainWindow`: QMainWindow。サイドバー + QStackedWidget（5ページ）。
-- `Sidebar`: アイコン付きナビゲーション（ダッシュボード/目標/ガントチャート/書籍/統計）。テーマ切替ボタン。
-- `DashboardPage`: カスタマイズ可能なダッシュボード。ヘッダーに🏆実績ボタン・🔔通知ボタン配置。2カラムグリッドでウィジェットを配置。編集モードでドラッグ&ドロップ並べ替え、追加・削除・リサイズ。refresh時に実績通知を自動生成。
-- `DashboardWidgetFrame`: ダッシュボードウィジェットのラッパー。編集モード時にヘッダーバー（ドラッグハンドル、リサイズ、削除）を表示。DRAG_MIME_TYPEでインデックスベースのドラッグを実行。
-- `DashboardGridContainer`: ドラッグ&ドロップを受け付けるグリッドコンテナ。DRAG_MIME_TYPE（並べ替え）とPALETTE_DRAG_MIME_TYPE（パレットから追加）の両方を処理。
-- `WidgetPalettePanel`: 編集モード時にスクロールエリア右側に表示されるパレットパネル。未配置ウィジェットをPaletteItemとして一覧表示。update_items()で動的にアイテムを更新。
-- `PaletteItem`: パレット内の個別ウィジェットカード。ドラッグ操作でPALETTE_DRAG_MIME_TYPEを使用し、ウィジェットタイプ文字列をグリッドにドロップして追加。
-- `GoalPage`: 目標カード一覧。追加/編集/削除。
-- `GoalCard`: 目標情報をカード形式で表示。
-- `GanttPage`: 統合セレクタコンボ（すべてのタスク・各目標・すべての書籍・各書籍を常時表示）+ ガントチャート + タイマー + 学習記録ボタン。セレクタでチャート表示を切替。タスク追加時に目標/読書の選択ダイアログを表示。
-- `GanttChart`: QGraphicsView/Scene。バー描画、今日線、月/日ヘッダー。
-- `GanttBarItem`: QGraphicsRectItem。計画バー + 進捗オーバーレイ。
-- `BookPage`: 書籍管理ページ。書籍の登録・ステータス変更・読了記録・削除を行う独立ページ。
-- `StatsPage`: 学習統計ページ。ヘッダー（右に🏆実績ボタン・🔔通知ボタン） + 今日バナー + サマリーカード + 自己ベスト記録 + 実施率 + 学習アクティビティチャート（期間切替） + 目標別統計セクション（プルダウン切替） + ログ履歴テーブル。refresh時に実績通知を自動生成。
-- `SummaryCard`: アイコン + 値 + ラベルのサマリー表示。
-- `GoalStatsSection`: プルダウン付き目標別統計セクション。「目標」「読書」を切替え、GoalStatsCardを動的に再構築。GoalStatsDisplayDataで表示データを受け取る。
-- `GoalStatsCard`: 目標別の学習統計（タスク内訳付き）。GoalStatsSection内で生成。
-- `TodayStudyBanner`: 今日の学習状況バナー。学習済み（success色）/未学習（warning色）を表示。
-- `PersonalRecordCard`: 自己ベスト記録カード。1日最長・週間最長・最長連続・累計を表示。
-- `ConsistencyCard`: 学習実施率カード。今週・今月・全体の実施率を色分け表示（80%以上=success, 50-80%=warning, 50%未満=error）。
-- `MilestoneButton`: 🏆アイコンボタン（QPushButton）。set_data(MilestoneData)でデータを保持し、クリックでMilestonePopupを表示。StatsPage・DashboardPageのヘッダーに配置。
-- `MilestonePopup`: 実績ポップアップダイアログ（QDialog）。上部に累計値（累計学習時間・累計学習日数・連続学習日数）、下部に閾値達成通知と次の目標を表示。
-- `NotificationButton`: 🔔アイコンボタン（QFrame）。ベルボタン + 未読バッジ（赤丸、99+上限）を表示。クリックでNotificationPopupを開き、閉じた後にバッジを再取得。StatsPage・DashboardPageのヘッダーに配置。
-- `NotificationPopup`: 通知一覧ポップアップダイアログ（QDialog）。スクロール可能な通知リスト、タイプ別アイコン（SYSTEM=📢, ACHIEVEMENT=✨）、未読ハイライト（accent色ボーダー）、「全て既読」ボタン。
-- `ActivityChartSection`: 期間切替プルダウン（日別/週別/月別/年別） + DailyActivityChartの複合ウィジェット。全期間データを一括保持し、プルダウン変更で即座にチャート切替。
-- `DailyActivityChart`: 学習時間の棒グラフ（QPainter描画）。DailyActivityData（後方互換）とActivityChartData（期間別）の両データ型に対応。
-- `StudyLogTable`: 学習ログ履歴テーブル（QTableWidget）。日付・タスク名・時間・メモを表示。
-- `GoalDialog`: 目標登録/編集フォーム。日本祝日対応カレンダー付き。
-- `TaskDialog`: タスク登録/編集フォーム。日本祝日対応カレンダー付き。関連書籍選択コンボ付き。書籍タスクモード（book_task_mode）で必須書籍セレクタ表示。
-- `BookManagementDialog`: 書籍管理ダイアログ。書籍の登録・ステータス変更・読了記録・削除。BookServiceを直接受取。
-- `BookReviewDialog`: 読了レビューダイアログ。要約・感想・読了日を入力。
-- `StudyLogDialog`: 学習時間手動入力ダイアログ。タスク選択 + 日付 + 時間 + メモ。
-- `StudyTimerWidget`: リアルタイム学習計測タイマー。停止時に自動記録。
-- `JapaneseCalendarWidget`: QCalendarWidget拡張。土曜青・日曜赤・祝日赤の色分け表示。
-- `CalendarDialog`: カレンダー日付選択ダイアログ。
-- `CalendarDatePicker`: 日付表示 + カレンダーボタンの日付選択ウィジェット。
-- `BookshelfWidget`: 本棚ダッシュボードウィジェット。登録書籍数・読了数・最近の読了を表示。
-- `ThemeManager`: ダーク/ライト切替。QSS生成。設定永続化。
-
-## ガントチャート描画方式
-
-`QGraphicsView` + `QGraphicsScene` を使用:
-
-- **ヘッダー**: 月の目盛りを上部に描画
-- **グリッド**: 縦線で月境界を表示
-- **バー**: 各タスクをQGraphicsRectItemで描画
-  - 計画バー（半透明）の上に実績バー（進捗%分の幅）を重ねる
-  - 目標の色で統一表示
-- **今日線**: 赤い破線で現在日を表示
-- **ツールチップ**: バーホバーでタスク詳細を表示
-
-### 座標計算（GanttCalculator）
-
-- `pixels_per_day = 30`: 1日あたりのピクセル数
-- `row_height = 40`: 1行の高さ
-- `header_height = 70`: ヘッダー高さ（2段構成：月ラベル + 日ラベル）
-- `bar_height = 24`: バーの高さ
-- `bar_margin = 8`: バーの上下マージン
-
-## テーマシステム
-
-QSSテンプレートに色パレットを展開する方式。
-
-### カラーパレット
-
-**ダークテーマ（Catppuccin Mocha）:**
-- 背景: #1E1E2E
-- テキスト: #CDD6F4
-- アクセント: #89B4FA
-
-**ライトテーマ（Catppuccin Latte）:**
-- 背景: #EFF1F5
-- テキスト: #4C4F69
-- アクセント: #1E66F5
-
-### テーマ永続化
-
-`data/settings.json` に `{"theme": "dark"}` 形式で保存。
-
-## データフロー
+### 2.2 データフロー
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant GUI
-    participant Service
-    participant Repository
-    participant JSON
+    participant GUI as GUI Layer
+    participant Service as Service Layer
+    participant Repo as Repository
+    participant JSON as JSON File
 
-    User->>GUI: 目標を追加
-    GUI->>Service: create_goal(why, when, what, how)
+    User->>GUI: ユーザー操作
+    GUI->>Service: ビジネスロジック呼び出し
     Service->>Service: バリデーション
-    Service->>Service: 色割り当て
-    Service->>Repository: add(goal)
-    Repository->>JSON: 書き込み
-    JSON-->>Repository: 完了
-    Repository-->>Service: Goal
-    Service-->>GUI: Goal
-    GUI-->>User: カード表示
+    Service->>Repo: データ操作
+    Repo->>JSON: ファイル読み書き
+    JSON-->>Repo: 結果
+    Repo-->>Service: モデルオブジェクト
+    Service-->>GUI: 処理結果
+    GUI-->>User: 画面更新
 ```
 
-## 日本祝日対応カレンダー
+### 2.3 設計原則
 
-日付選択のQDateEditにカスタムQCalendarWidgetを適用し、日本の暦を反映した色分け表示を行う。
+| 原則 | 適用 |
+|------|------|
+| GUI/ロジック分離 | GUIはService呼び出しと表示更新のみ |
+| 依存性注入 | Service/Repositoryをコンストラクタで注入 |
+| Repository Pattern | データアクセスをRepositoryに集約 |
+| イミュータブル操作 | DashboardLayoutServiceのレイアウト操作はコピーを返す |
+| 重複防止 | Notificationのdedup_keyで実績通知の重複を防止 |
+| 型安全 | 全コードにPython型ヒント必須 |
 
-### 色分けルール
+---
+
+## 3. データモデル
+
+### 3.1 モデル一覧
+
+```mermaid
+classDiagram
+    class Goal {
+        +id: str (UUID)
+        +why: str
+        +when_target: str
+        +when_type: WhenType
+        +what: str
+        +how: str
+        +color: str
+        +created_at: datetime
+        +updated_at: datetime
+        +get_target_date() date|None
+        +to_dict() dict
+        +from_dict(data) Goal
+    }
+
+    class Task {
+        +id: str (UUID)
+        +goal_id: str
+        +title: str
+        +start_date: date
+        +end_date: date
+        +status: TaskStatus
+        +progress: int (0-100)
+        +memo: str
+        +book_id: str
+        +order: int
+        +created_at: datetime
+        +updated_at: datetime
+        +duration_days: int
+        +to_dict() dict
+        +from_dict(data) Task
+    }
+
+    class Book {
+        +id: str (UUID)
+        +title: str
+        +status: BookStatus
+        +summary: str
+        +impressions: str
+        +completed_date: date|None
+        +start_date: date|None
+        +end_date: date|None
+        +progress: int (0-100)
+        +created_at: datetime
+        +updated_at: datetime
+        +has_schedule: bool
+        +to_dict() dict
+        +from_dict(data) Book
+    }
+
+    class StudyLog {
+        +id: str (UUID)
+        +task_id: str
+        +study_date: date
+        +duration_minutes: int (>0)
+        +memo: str
+        +task_name: str
+        +created_at: datetime
+        +duration_hours: float
+        +to_dict() dict
+        +from_dict(data) StudyLog
+    }
+
+    class Notification {
+        +id: str (UUID)
+        +notification_type: NotificationType
+        +title: str
+        +message: str
+        +is_read: bool
+        +dedup_key: str
+        +created_at: datetime
+        +to_dict() dict
+        +from_dict(data) Notification
+    }
+
+    Goal "1" --> "*" Task : goal_id
+    Task "1" --> "*" StudyLog : task_id
+    Book "1" --> "*" Task : book_id
+```
+
+### 3.2 Goal（3W1H目標）
+
+| フィールド | 型 | 説明 | 制約 |
+|-----------|-----|------|------|
+| id | str (UUID) | 一意識別子 | 自動生成 |
+| why | str | 学習の動機・目的 | 必須（空不可） |
+| when_target | str | 目標日 or 期間文字列 | 必須（空不可） |
+| when_type | WhenType | "date" or "period" | DATE / PERIOD |
+| what | str | 学習対象 | 必須（空不可） |
+| how | str | 学習方法 | 必須（空不可） |
+| color | str (HEX) | 表示色 | 8色パレットから自動割当 |
+| created_at | datetime (ISO8601) | 作成日時 | 自動生成 |
+| updated_at | datetime (ISO8601) | 更新日時 | 自動更新 |
+
+**色割り当てロジック**: `GOAL_COLORS`（8色）から未使用色を順に割り当て。全色使用済みの場合は目標数 mod 8 で循環。
+
+### 3.3 Task（ガントチャートタスク）
+
+| フィールド | 型 | 説明 | 制約 |
+|-----------|-----|------|------|
+| id | str (UUID) | 一意識別子 | 自動生成 |
+| goal_id | str (UUID) | 親Goalへの参照 | 書籍タスクは`"__books__"` |
+| title | str | タスク名 | 必須 |
+| start_date | date | 開始日 | start_date ≦ end_date |
+| end_date | date | 終了日 | start_date ≦ end_date |
+| status | TaskStatus | ステータス | 進捗率から自動決定 |
+| progress | int | 進捗率 | 0-100 |
+| memo | str | メモ | 任意 |
+| book_id | str | 関連書籍ID | 空文字で未設定 |
+| order | int | 表示順 | 自動割当（既存タスク数） |
+| created_at | datetime (ISO8601) | 作成日時 | 自動生成 |
+| updated_at | datetime (ISO8601) | 更新日時 | 自動更新 |
+
+**ステータス自動決定**: progress=0% → NOT_STARTED, 1-99% → IN_PROGRESS, 100% → COMPLETED
+
+**特殊ID**: `BOOK_GANTT_GOAL_ID = "__books__"` — 書籍タスクの識別に使用
+
+### 3.4 Book（書籍）
+
+| フィールド | 型 | 説明 | 制約 |
+|-----------|-----|------|------|
+| id | str (UUID) | 一意識別子 | 自動生成 |
+| title | str | 書籍名 | 必須（空不可） |
+| status | BookStatus | ステータス | UNREAD / READING / COMPLETED |
+| summary | str | 要約 | 読了時に記入 |
+| impressions | str | 感想 | 読了時に記入 |
+| completed_date | date \| None | 読了日 | 読了時に設定 |
+| start_date | date \| None | スケジュール開始日 | 任意 |
+| end_date | date \| None | スケジュール終了日 | 任意 |
+| progress | int | 進捗率 | 0-100 |
+| created_at | datetime (ISO8601) | 作成日時 | 自動生成 |
+| updated_at | datetime (ISO8601) | 更新日時 | 自動更新 |
+
+**バリデーション**: title空不可、progress 0-100範囲、start_date ≦ end_date
+
+### 3.5 StudyLog（学習ログ）
+
+| フィールド | 型 | 説明 | 制約 |
+|-----------|-----|------|------|
+| id | str (UUID) | 一意識別子 | 自動生成 |
+| task_id | str (UUID) | 親Taskへの参照 | 必須 |
+| study_date | date | 学習実施日 | 必須 |
+| duration_minutes | int | 学習時間（分） | > 0 |
+| memo | str | メモ | 任意 |
+| task_name | str | タスク名キャッシュ | タスク削除後の表示用 |
+| created_at | datetime (ISO8601) | 作成日時 | 自動生成 |
+
+### 3.6 Notification（通知）
+
+| フィールド | 型 | 説明 | 制約 |
+|-----------|-----|------|------|
+| id | str (UUID) | 一意識別子 | 自動生成 |
+| notification_type | NotificationType | 通知タイプ | SYSTEM / ACHIEVEMENT |
+| title | str | 通知タイトル | 必須 |
+| message | str | 通知メッセージ | 必須 |
+| is_read | bool | 既読フラグ | デフォルトFalse |
+| dedup_key | str | 重複防止キー | 例: "total_hours:100" |
+| created_at | datetime (ISO8601) | 作成日時 | 自動生成 |
+
+### 3.7 列挙型一覧
+
+| 列挙型 | 値 | 用途 |
+|--------|-----|------|
+| WhenType | DATE, PERIOD | 目標の期限タイプ |
+| TaskStatus | NOT_STARTED, IN_PROGRESS, COMPLETED | タスクステータス |
+| BookStatus | UNREAD, READING, COMPLETED | 書籍ステータス |
+| NotificationType | SYSTEM, ACHIEVEMENT | 通知タイプ |
+| ThemeType | DARK, LIGHT | テーマタイプ |
+| MilestoneType | TOTAL_HOURS, STUDY_DAYS, STREAK | 実績タイプ |
+| ActivityPeriodType | YEARLY, MONTHLY, WEEKLY, DAILY | 集計期間タイプ |
+
+### 3.8 統計用データクラス
+
+| クラス | 用途 | 主要フィールド |
+|--------|------|---------------|
+| TaskStudyStats | タスク単位統計 | total_minutes, study_days, log_count |
+| GoalStudyStats | 目標単位統計 | goal_id, task_stats[], total_minutes, total_study_days |
+| DailyStudyData | 日別集計 | study_date, total_minutes |
+| DailyActivityData | 日別チャートデータ | days[], max_minutes, period_start, period_end |
+| ActivityBucketData | 期間バケット | label, total_minutes, period_start, period_end |
+| ActivityChartData | 期間別チャートデータ | period_type, buckets[], max_minutes |
+| StreakData | 連続学習データ | current_streak, longest_streak, studied_today |
+| TodayStudyData | 今日の学習状況 | total_minutes, session_count, studied |
+| Milestone | 実績定義 | milestone_type, value, label |
+| MilestoneData | 実績データ | total_hours, study_days, current_streak, achieved[], next_milestone |
+| PersonalRecordData | 自己ベスト記録 | best_day_minutes, best_day_date, best_week_minutes, best_week_start, longest_streak, total_hours, total_study_days |
+| ConsistencyData | 学習実施率 | this_week_days/total, this_month_days/total, overall_rate |
+| BookshelfData | 本棚データ | total_count, completed_count, reading_count, recent_completed[] |
+| DashboardWidgetConfig | ウィジェット配置 | widget_type, column_span |
+| WidgetMetadata | ウィジェットメタデータ | widget_type, display_name, icon, default_span, allowed_spans |
+
+---
+
+## 4. データ永続化
+
+### 4.1 ストレージ方式
+
+JSONファイルベースの永続化。`JsonStorage`クラスが汎用的なJSON読み書きを提供する。
+
+### 4.2 データファイル一覧
+
+| ファイル名 | 保存先 | 内容 |
+|-----------|--------|------|
+| goals.json | data/ | 3W1H目標リスト |
+| tasks.json | data/ | ガントチャートタスクリスト |
+| study_logs.json | data/ | 学習ログリスト |
+| books.json | data/ | 書籍リスト |
+| notifications.json | data/ | 通知リスト |
+| settings.json | data/ | アプリケーション設定（テーマ、ダッシュボードレイアウト、通知設定） |
+| system_notifications.json | data/ | システム通知定義（読み込み専用） |
+
+### 4.3 settings.json の共有構造
+
+settings.jsonは複数のサービスが読み書きする共有設定ファイル：
+
+| キー | 管理サービス | 型 | 説明 |
+|------|-------------|-----|------|
+| theme | ThemeManager | str ("dark"/"light") | テーマ設定 |
+| dashboard_layout | DashboardLayoutService | list[dict] | ダッシュボードレイアウト |
+| notifications_enabled | NotificationService | bool | 通知有効/無効 |
+
+各サービスは他キーを保持しつつ自分のキーのみ更新する。
+
+### 4.4 Repository 一覧
+
+| Repository | モデル | 特記事項 |
+|------------|--------|---------|
+| GoalRepository | Goal | 標準CRUD |
+| TaskRepository | Task | goal_id/book_idフィルタ、goal_idカスケード削除 |
+| StudyLogRepository | StudyLog | task_idフィルタ、複数task_id一括取得、task_idカスケード削除 |
+| BookRepository | Book | 標準CRUD |
+| NotificationRepository | Notification | dedup_keyチェック、既読管理、未読カウント |
+
+---
+
+## 5. サービス層
+
+### 5.1 ドメインサービス
+
+| サービス | 責務 | 依存Repository |
+|---------|------|---------------|
+| GoalService | 目標CRUD、色割当、タスク連鎖削除 | GoalRepository, TaskRepository |
+| TaskService | タスクCRUD、ステータス自動管理 | TaskRepository |
+| StudyLogService | 学習ログCRUD、タスク/目標統計集計 | StudyLogRepository |
+| BookService | 書籍CRUD、読了記録、タスク紐付け管理 | BookRepository, TaskRepository |
+| BookGanttService | 書籍ガントチャート管理、進捗同期 | BookService, TaskService |
+| NotificationService | 通知管理、実績通知自動生成、通知有効/無効設定 | NotificationRepository |
+| DataExportService | データエクスポート/インポート/全削除 | なし（Pathベース） |
+
+### 5.2 計算サービス
+
+| サービス | 責務 | 特徴 |
+|---------|------|------|
+| GanttCalculator | 日付→ピクセル変換、バー座標計算 | Qt非依存 |
+| StudyStatsCalculator | 学習ログの期間別集計 | Qt非依存 |
+| MotivationCalculator | ストリーク、実績、自己ベスト、実施率計算 | Qt非依存 |
+
+### 5.3 基盤サービス
+
+| サービス | 責務 | 特徴 |
+|---------|------|------|
+| DashboardLayoutService | ダッシュボードレイアウト管理 | Qt非依存、イミュータブル操作 |
+| HolidayService | 日本祝日判定 | jpholidayラッパー、年単位キャッシュ |
+| ThemeManager | テーマ管理、QSS生成 | settings.json永続化 |
+
+### 5.4 カスケード削除の連鎖
+
+```
+Goal削除 → goal_idが一致するTask全削除
+Task削除 → task_idが一致するStudyLog全削除
+Book削除 → 書籍タスク（goal_id=="__books__"かつbook_id一致）完全削除
+           + 参照タスクのbook_idクリア
+```
+
+### 5.5 DataExportService
+
+| メソッド | 機能 | 対象ファイル |
+|---------|------|-------------|
+| get_exportable_files() | エクスポート対象ファイルの一覧 | 全6ファイル |
+| export_data(output_path) | ZIPエクスポート | 全6ファイル |
+| import_data(zip_path) | ZIPインポート（JSONバリデーション付き） | 全6ファイル |
+| validate_zip(zip_path) | ZIP内容の検証 | 全6ファイル |
+| clear_all_data() | 全データ削除 | settings.json以外の5ファイル |
+
+**エクスポート対象**: goals.json, tasks.json, study_logs.json, books.json, notifications.json, settings.json
+
+**削除対象**: goals.json, tasks.json, study_logs.json, books.json, notifications.json（settings.jsonは保持）
+
+### 5.6 通知システム
+
+#### 実績通知の閾値
+
+| 実績タイプ | 閾値 | dedup_keyフォーマット |
+|-----------|------|---------------------|
+| 累計学習時間 | 1, 5, 10, 25, 50, 100, 250, 500, 1000時間 | total_hours:{値} |
+| 学習日数 | 3, 7, 14, 30, 60, 100, 200, 365日 | study_days:{値} |
+| 連続学習 | 3, 7, 14, 30, 60, 100日 | streak:{値} |
+
+#### 通知生成フロー
+
+```mermaid
+sequenceDiagram
+    participant Page as Dashboard/StatsPage
+    participant MC as MotivationCalculator
+    participant NS as NotificationService
+    participant NR as NotificationRepository
+
+    Page->>MC: calculate_milestones(logs, streak)
+    MC-->>Page: MilestoneData
+    Page->>NS: check_and_create_achievement_notifications(data)
+    NS->>NS: notifications_enabled確認
+    alt 通知無効
+        NS-->>Page: 空リスト
+    else 通知有効
+        loop 各閾値タイプ
+            NS->>NR: exists_by_dedup_key(key)
+            alt 未通知
+                NS->>NR: add(notification)
+            end
+        end
+        NS-->>Page: 新規通知リスト
+    end
+```
+
+---
+
+## 6. GUI層
+
+### 6.1 ウィンドウ構造
+
+```
+MainWindow (QMainWindow)
+├── HeaderBar（固定高48px）
+│   ├── ハンバーガーボタン (☰)
+│   └── ページタイトル
+├── QStackedWidget（6ページ）
+│   ├── [0] DashboardPage
+│   ├── [1] GoalPage
+│   ├── [2] GanttPage
+│   ├── [3] BookPage
+│   ├── [4] StatsPage
+│   └── [5] SettingsPage
+├── DrawerOverlay（半透明背景）
+└── NavigationDrawer（スライドイン、260px幅）
+    ├── 🏠 ダッシュボード
+    ├── 🎯 3W1H 目標
+    ├── 📊 ガントチャート
+    ├── 📚 書籍
+    ├── 📈 統計
+    └── ⚙️ 設定
+```
+
+### 6.2 ページ一覧
+
+| ページ | クラス | インデックス | 概要 |
+|--------|--------|-------------|------|
+| ダッシュボード | DashboardPage | 0 | カスタマイズ可能ウィジェットグリッド |
+| 3W1H目標 | GoalPage | 1 | 目標カード一覧、追加/編集/削除 |
+| ガントチャート | GanttPage | 2 | 統合セレクタ＋ガントチャート＋タイマー |
+| 書籍 | BookPage | 3 | 書籍管理（登録/ステータス/読了レビュー） |
+| 統計 | StatsPage | 4 | 学習統計・実績・アクティビティチャート |
+| 設定 | SettingsPage | 5 | テーマ/通知/データ管理/アプリ情報 |
+
+### 6.3 ダイアログ一覧
+
+| ダイアログ | クラス | 用途 |
+|-----------|--------|------|
+| 目標登録/編集 | GoalDialog | 3W1Hフォーム、日本祝日対応カレンダー |
+| タスク登録/編集 | TaskDialog | タスクフォーム、関連書籍選択、書籍タスクモード |
+| 学習ログ記録 | StudyLogDialog | タスク選択＋日付＋時間＋メモ |
+| 書籍管理 | BookManagementDialog | 書籍の登録・管理 |
+| 読了レビュー | BookReviewDialog | 要約・感想・読了日入力 |
+| 読書スケジュール | BookScheduleDialog | 開始日・終了日設定 |
+| 通知詳細 | NotificationDetailDialog | 通知内容の詳細表示 |
+
+### 6.4 ウィジェット一覧
+
+#### ナビゲーション系
+
+| ウィジェット | クラス | 概要 |
+|-------------|--------|------|
+| ヘッダーバー | HeaderBar | ハンバーガーボタン＋ページタイトル |
+| ドロワーオーバーレイ | DrawerOverlay | 半透明背景、クリックでドロワー閉じ |
+| ナビゲーションドロワー | NavigationDrawer | スライドイン式ナビ（260px幅） |
+
+#### ダッシュボード系
+
+| ウィジェット | クラス | 概要 |
+|-------------|--------|------|
+| 今日の学習バナー | TodayStudyBanner | 学習済/未学習を大きく表示 |
+| サマリーカード | SummaryCard | アイコン＋値＋ラベル表示 |
+| 自己ベスト記録 | PersonalRecordCard | 日/週最高・最長連続・累計 |
+| 学習実施率 | ConsistencyCard | 今週/今月/全体の実施率 |
+| 本棚 | BookshelfWidget | 登録数・読了数・最近の読了 |
+| ウィジェットフレーム | DashboardWidgetFrame | ドラッグ可能なラッパー |
+| グリッドコンテナ | DashboardGridContainer | ドロップ受付コンテナ |
+| ウィジェットパレット | WidgetPalettePanel | 未配置ウィジェット一覧 |
+
+#### チャート系
+
+| ウィジェット | クラス | 概要 |
+|-------------|--------|------|
+| アクティビティチャート | ActivityChartSection | 期間切替プルダウン＋棒グラフ |
+| 日別チャート | DailyActivityChart | QPainter描画の棒グラフ |
+| ガントチャート | GanttChart | QGraphicsView/Sceneベース |
+
+#### 通知・実績系
+
+| ウィジェット | クラス | 概要 |
+|-------------|--------|------|
+| 通知ボタン | NotificationButton | 🔔 + 未読バッジ |
+| 通知ポップアップ | NotificationPopup | 通知一覧、個別クリック既読 |
+| 実績ボタン | MilestoneButton | 🏆 アイコンボタン |
+| 実績ポップアップ | MilestonePopup | 累計値＋達成通知＋次の目標 |
+
+#### データ表示系
+
+| ウィジェット | クラス | 概要 |
+|-------------|--------|------|
+| 学習ログテーブル | StudyLogTable | QTableWidgetベース |
+| 目標別統計セクション | GoalStatsSection | プルダウン切替＋統計カード |
+| 目標統計カード | GoalStatsCard | 目標別のタスク内訳 |
+
+#### カレンダー系
+
+| ウィジェット | クラス | 概要 |
+|-------------|--------|------|
+| 日本祝日カレンダー | JapaneseCalendarWidget | 土曜青・日曜赤・祝日赤 |
+| カレンダーダイアログ | CalendarDialog | 日付選択ダイアログ |
+| カレンダー日付選択 | CalendarDatePicker | 日付表示＋カレンダーボタン |
+
+#### その他
+
+| ウィジェット | クラス | 概要 |
+|-------------|--------|------|
+| 学習タイマー | StudyTimerWidget | リアルタイム計測、停止時自動記録 |
+| 目標カード | GoalCard | 目標情報をカード形式表示 |
+| ロジックコンポーネント | TaskStudyLogLogic | 学習ログハンドリングロジック |
+
+### 6.5 ナビゲーションシステム
+
+#### ドロワーアニメーション
+
+| 操作 | アニメーション | 時間 | イージング |
+|------|-------------|------|-----------|
+| 開く | スライドイン（左→右） | 200ms | OutCubic |
+| 閉じる | スライドアウト（右→左） | 150ms | InCubic |
+
+#### ドロワー開閉フロー
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Header as HeaderBar
+    participant MW as MainWindow
+    participant Overlay as DrawerOverlay
+    participant Drawer as NavigationDrawer
+
+    User->>Header: ☰ クリック
+    Header->>MW: hamburger_clicked
+    MW->>Overlay: show()
+    MW->>Drawer: show() + スライドインアニメーション
+    User->>Drawer: ナビ項目クリック
+    Drawer->>MW: nav_item_clicked(index)
+    MW->>Overlay: hide()
+    MW->>Drawer: スライドアウトアニメーション → hide()
+    MW->>MW: ページ切替
+```
+
+### 6.6 ダッシュボードシステム
+
+#### レイアウト構造
+
+- 2カラムグリッド（`QGridLayout`）
+- ウィジェットは半幅（column_span=1）または全幅（column_span=2）
+- 9種類のウィジェットから選択・配置
+
+#### 利用可能ウィジェット
+
+| タイプID | 表示名 | アイコン | デフォルト幅 |
+|---------|--------|---------|-------------|
+| today_banner | 今日の学習状況 | ✅ | 全幅 |
+| total_time_card | 合計学習時間 | ⏱️ | 半幅 |
+| study_days_card | 学習日数 | 📅 | 半幅 |
+| goal_count_card | 目標数 | 🎯 | 半幅 |
+| streak_card | 連続学習 | 🔥 | 半幅 |
+| personal_record | 自己ベスト | 🏅 | 半幅 |
+| consistency | 学習の実施率 | 📊 | 半幅 |
+| bookshelf | 本棚 | 📚 | 全幅 |
+| daily_chart | 学習アクティビティ | 📈 | 全幅 |
+
+#### 編集モード
+
+「✏️ 編集」ボタンで切替：
+- 各ウィジェットにヘッダーバー表示（ドラッグ ☰、名前、リサイズ ↔、削除 ✕）
+- 右側にウィジェットパレットパネル表示
+- ドラッグ&ドロップで順序変更・追加
+- 「✓ 完了」で保存
+
+### 6.7 テーマシステム
+
+#### カラーパレット
+
+**ダークテーマ（Catppuccin Mocha）**: 背景 #1E1E2E / テキスト #CDD6F4 / アクセント #89B4FA
+
+**ライトテーマ（Catppuccin Latte）**: 背景 #EFF1F5 / テキスト #4C4F69 / アクセント #1E66F5
+
+#### QSS構造
+
+`_build_stylesheet(colors)`がカラーパレットからQSSテンプレートを展開。対象コンポーネント：
+- QMainWindow / QWidget / QScrollArea
+- QPushButton（primary / secondary / danger）
+- QLabel（section_title / card_title / muted_text 等）
+- QComboBox / QDateEdit / QLineEdit / QTextEdit / QSpinBox
+- QTableWidget / QHeaderView
+- QDialog / QCalendarWidget
+- HeaderBar / ハンバーガーボタン / NavigationDrawer
+- サイドバーボタン / ダッシュボードカード
+- 通知ポップアップ / 実績ポップアップ
+
+### 6.8 設定ページ
+
+4セクション構成：
+
+| セクション | 内容 |
+|-----------|------|
+| テーマ | 現在のテーマ表示、ダーク/ライト切替ボタン |
+| 通知 | 実績通知の有効/無効切替 |
+| データ管理 | エクスポート/インポート/全データ削除、データ保存先表示 |
+| アプリ情報 | バージョン表示 |
+
+---
+
+## 7. ガントチャート描画
+
+### 7.1 描画方式
+
+`QGraphicsView` + `QGraphicsScene` を使用。
+
+### 7.2 座標計算パラメータ
+
+| パラメータ | 値 | 説明 |
+|-----------|-----|------|
+| pixels_per_day | 30.0 | 1日あたりのピクセル数 |
+| row_height | 40 | 1行の高さ |
+| header_height | 70 | ヘッダー高さ（2段：月＋日） |
+| bar_height | 24 | バーの高さ |
+| bar_margin | 8 | バーの上下マージン |
+
+### 7.3 描画要素
+
+| 要素 | 説明 |
+|------|------|
+| ヘッダー | 月ラベル＋日ラベルの2段構成 |
+| グリッド | 月境界の縦線 |
+| 計画バー | 半透明のQGraphicsRectItem |
+| 進捗バー | 計画バー上に進捗率分の幅で重畳 |
+| 今日線 | 赤い破線で現在日表示 |
+| ツールチップ | バーホバーでタスク詳細 |
+
+### 7.4 統合セレクタ
+
+GanttPageのコンボボックスで以下を切替：
+- すべてのタスク（目標＋書籍）
+- 各目標（目標名で個別選択）
+- すべての書籍
+- 各書籍（書籍名で個別選択）
+
+---
+
+## 8. 日本祝日対応カレンダー
+
+### 8.1 色分けルール
 
 | 日付種別 | 色 | 優先度 |
 |---------|-----|--------|
-| 祝日 | 赤 (#DC2626) | 最高（土曜より優先） |
+| 祝日 | 赤 (#DC2626) | 最高 |
 | 日曜日 | 赤 (#DC2626) | 高 |
 | 土曜日 | 青 (#2563EB) | 中 |
 | 平日 | 黒 (#1F2937) | 低 |
 
-### 構成
-
-- `HolidayService`: jpholidayライブラリを使用して祝日判定。年単位でキャッシュし、paintCellの高頻度呼び出しに対応。
-- `JapaneseCalendarWidget`: QCalendarWidgetのpaintCellをオーバーライドし、HolidayServiceで取得した情報に基づき色分け描画。
-- `create_japanese_date_edit()`: ファクトリ関数。GoalDialog・TaskDialogの両方で使用。
-
-### 適用箇所
+### 8.2 使用箇所
 
 - GoalDialog: When（いつまでに）の日付入力
 - TaskDialog: 開始日・終了日の日付入力
 
-## 学習時間トラッキング
+---
 
-タスクごとの学習時間を記録・集計し、統計ページで確認できる。忙しい社会人のモチベーション維持を目的とする。
+## 9. 学習アクティビティチャート
 
-### 記録方法
+### 9.1 描画方式
 
-- **手動入力**: StudyLogDialogで日付・時間・タスクを選択して記録
-- **タイマー計測**: StudyTimerWidgetでリアルタイム計測。停止時に自動記録（最小1分、切り上げ）
+QWidgetの`paintEvent`でQPainterを使用した棒グラフ描画。
 
-### 統計ページ（StatsPage）
-
-- **今日の学習状況バナー**: 学習済み/未学習を大きく表示（TodayStudyBanner）
-- **サマリーカード**: 合計学習時間、学習日数（ユニーク日数）、目標数、連続学習日数（ストリーク）
-- **自己ベスト記録カード**: 1日最長・週間最長・最長連続・累計時間/日数を表示（PersonalRecordCard）
-- **実施率カード**: 今週・今月・全体の学習実施率を色分け表示（ConsistencyCard）
-- **実績ボタン**: ヘッダー右に🏆アイコンボタンを配置。クリックでポップアップダイアログに実績を表示（MilestoneButton + MilestonePopup）
-- **学習アクティビティチャート**: 年別/月別/週別/日別をプルダウンで切替え、期間ごとの学習時間を棒グラフで表示（ActivityChartSection）
-- **目標別統計セクション**: プルダウンで「目標」「読書」を切替え、選択に応じた統計カードを動的表示（GoalStatsSection）
-- **学習ログ履歴テーブル**: 個別の学習ログを日付降順でテーブル表示（StudyLogTable）※最下部に配置
-
-### 集計用データクラス
-
-- `TaskStudyStats`: タスク単位の統計（total_minutes, study_days, log_count）
-- `GoalStudyStats`: 目標単位の統計（task_stats[], total_minutes, total_study_days）
-- `DailyStudyData`: 1日分の集計データ（study_date, total_minutes）
-- `DailyActivityData`: チャート描画用データ（days[], max_minutes, period_start, period_end）
-- `StreakData`: 連続学習日数データ（current_streak, longest_streak, studied_today）
-- `TodayStudyData`: 今日の学習状況データ（total_minutes, session_count, studied）
-- `MilestoneData`: 実績データ（total_hours, study_days, current_streak, achieved[], next_milestone）
-- `ActivityPeriodType`: 集計期間種別Enum（YEARLY, MONTHLY, WEEKLY, DAILY）
-- `ActivityBucketData`: 期間バケットデータ（label, total_minutes, period_start, period_end）
-- `ActivityChartData`: 期間別チャートデータ（period_type, buckets[], max_minutes）
-- `PersonalRecordData`: 自己ベスト記録データ（best_day_minutes, best_day_date, best_week_minutes, best_week_start, longest_streak, total_hours, total_study_days）
-- `ConsistencyData`: 学習実施率データ（this_week_days, this_week_total, this_month_days, this_month_total, overall_rate, overall_study_days, overall_total_days）
-- `BookshelfData`: 本棚ダッシュボード用データ（total_count, completed_count, reading_count, recent_completed[]）
-- `GoalStatsDisplayData`: 目標別統計の表示データ（name, color, stats: GoalStudyStats, task_names）
-- `DashboardWidgetConfig`: ダッシュボードウィジェットの配置設定（widget_type, column_span）
-- `WidgetMetadata`: ウィジェットのメタデータ（widget_type, display_name, icon, default_span, allowed_spans）
-
-### 学習アクティビティチャート描画方式
-
-QWidgetの`paintEvent`でQPainterを使用した静的バーチャート描画:
-
-- **バー**: 各バケットのaccentカラー角丸バー。高さはmax_minutesに対する比率
-- **Y軸**: 分数ラベル（0, 中間値, 最大値）、基準ドット線
-- **X軸**: バケット数に応じた間隔でラベル表示（15本以下は全表示、それ以上は7間隔）
-- **0分のバケット**: border色の1px線で存在を表示
-- テーマ対応: ThemeManager.get_colors()で色を動的取得
-
-#### 期間切替（ActivityChartSection）
-
-QComboBoxで以下の4期間を切替可能:
+### 9.2 期間切替
 
 | 期間 | バケット数 | ラベル形式 | 範囲 |
 |------|-----------|-----------|------|
@@ -336,151 +726,131 @@ QComboBoxで以下の4期間を切替可能:
 
 refresh時に4期間すべてを一括計算・保持し、プルダウン変更時は再計算なしで即座に切替。
 
-## モチベーション機能
+---
 
-習慣化の後押しと小さな達成感で自己研鑽の継続を支援する。
+## 10. シグナル接続
 
-### 習慣化の後押し
+### 10.1 MainWindowのシグナル接続
 
-- **連続学習日数（ストリーク）**: Duolingo風の連続日数表示。今日未学習でも昨日まで連続していればストリーク維持。SummaryCardの4番目として表示。
-- **今日の学習状況バナー**: ページ上部に学習済み（success色）/未学習（warning色）を大きく表示。学習時間・セッション数も表示。
+| シグナル元 | シグナル | シグナル先 | 動作 |
+|-----------|---------|-----------|------|
+| HeaderBar | hamburger_clicked | MainWindow._toggle_drawer | ドロワー開閉 |
+| NavigationDrawer | nav_item_clicked(int) | MainWindow._on_page_changed | ページ切替 |
+| NavigationDrawer | settings_clicked | MainWindow._on_settings_requested | 設定ページ表示 |
+| DrawerOverlay | clicked | MainWindow._close_drawer | ドロワー閉じ |
+| SettingsPage | theme_changed | MainWindow._apply_theme | テーマ再適用 |
+| GoalPage | goals_changed | DashboardPage.refresh | ダッシュボード更新 |
+| GoalPage | goals_changed | GanttPage.refresh | ガントチャート更新 |
+| GoalPage | goals_changed | StatsPage.refresh | 統計ページ更新 |
 
-### 小さな達成感
+---
 
-- **実績**: 累計値（累計学習時間・累計学習日数・連続学習日数）と閾値達成通知を表示。閾値は累計時間（1h,5h,10h...）、学習日数（3,7,14,30...日）、ストリーク（3,7,14,30...日）。
+## 11. ログ設計
 
-### 自己比較（過去の自分との比較）
+### 11.1 ログ設定
 
-- **学習アクティビティチャート**: 年別/月別/週別/日別の学習時間推移を棒グラフで表示。プルダウンで期間を動的に切替え可能。
-- **自己ベスト記録**: 1日最長学習時間（日付付き）、週間最長学習時間（週の開始日付き）、最長連続学習日数、累計学習時間・日数を表示。success色でレコード値を強調。
-- **学習実施率**: 今週・今月・全体の学習実施率を表示。80%以上=success色、50-80%=warning色、50%未満=error色で色分け。
+| 項目 | 値 |
+|------|-----|
+| 出力先 | logs/ ディレクトリ |
+| ファイル名 | app_YYYY-MM-DD.log |
+| フォーマット | `YYYY-MM-DD HH:MM:SS.mmm | LEVEL | module:function:line | message` |
+| ローテーション | 10MB / 30日 |
+| デフォルトレベル | INFO |
 
-### MotivationCalculator
+### 11.2 LoggerMixin
 
-Qt非依存の純粋ロジッククラス。5つの計算メソッドを提供:
-- `calculate_streak()`: 学習日のセットから連続日数と最長ストリークを計算
-- `calculate_today_study()`: 今日のログを集計（合計時間・セッション数）
-- `calculate_milestones()`: 累計値と閾値達成通知を計算
-- `calculate_personal_records()`: 日別・週別最高記録、最長連続、累計の算出
-- `calculate_consistency()`: 今週・今月・全期間の学習実施率を算出
+クラスに`self.logger`プロパティを提供するMixin。`module.ClassName`形式のロガー名を自動生成。
 
-## 通知システム
+---
 
-実績達成やシステムからのお知らせをユーザーに通知する。ページヘッダーの🔔アイコンから一覧を確認可能。
+## 12. ディレクトリ構造
 
-### 通知タイプ
-
-| タイプ | 説明 | アイコン |
-|--------|------|---------|
-| SYSTEM | 運営からのお知らせ、バージョンアップ情報（将来用） | 📢 |
-| ACHIEVEMENT | 累計学習時間・学習日数・連続学習日数の閾値達成時に自動生成 | ✨ |
-
-### 実績通知の閾値
-
-| 実績タイプ | 閾値 |
-|-----------|------|
-| 累計学習時間 | 1, 5, 10, 25, 50, 100, 250, 500, 1000時間 |
-| 学習日数 | 3, 7, 14, 30, 60, 100, 200, 365日 |
-| 連続学習 | 3, 7, 14, 30, 60, 100日 |
-
-### 重複防止
-
-`dedup_key`フィールドで実績通知の重複生成を防止。形式: `"{milestone_type}:{threshold}"`（例: `"total_hours:100"`, `"study_days:30"`）。`NotificationRepository.exists_by_dedup_key()`で既存チェックを行い、未通知の実績のみ新規作成。
-
-### システム通知
-
-`data/system_notifications.json`から読み込み。将来のバージョンアップ情報や運営からのお知らせに使用。起動時に`load_system_notifications()`で未登録分を読み込む。
-
-### ページ統合
-
-DashboardPage・StatsPageの`refresh()`で`MilestoneData`の累計値を閾値と比較し、実績通知を自動生成。未読数をNotificationButtonのバッジに反映。
-
-## ダッシュボード機能
-
-アプリ起動時のデフォルトページ。ユーザーが自由にウィジェットを配置・カスタマイズできる。
-
-### レイアウトシステム
-
-- **2カラムグリッド**: ウィジェットは半幅（span=1）または全幅（span=2）で配置
-- **ドラッグ&ドロップ**: 編集モードでウィジェットの順序を変更可能
-- **設定永続化**: `settings.json`の`dashboard_layout`キーに保存（ThemeManagerと同じファイル）
-
-### 利用可能ウィジェット（9種類）
-
-| ウィジェット | タイプID | デフォルト幅 | リサイズ |
-|-------------|---------|-------------|---------|
-| 今日の学習状況 | today_banner | 全幅 | 可（半幅↔全幅） |
-| 合計学習時間 | total_time_card | 半幅 | 可（半幅↔全幅） |
-| 学習日数 | study_days_card | 半幅 | 可（半幅↔全幅） |
-| 目標数 | goal_count_card | 半幅 | 可（半幅↔全幅） |
-| 連続学習 | streak_card | 半幅 | 可（半幅↔全幅） |
-| 自己ベスト | personal_record | 半幅 | 可（半幅↔全幅） |
-| 学習の実施率 | consistency | 半幅 | 可（半幅↔全幅） |
-| 本棚 | bookshelf | 全幅 | 可（半幅↔全幅） |
-| 学習アクティビティ | daily_chart | 全幅 | 可（半幅↔全幅） |
-
-※ 実績はダッシュボードヘッダーの🏆ボタン（MilestoneButton）に移行。クリックでポップアップ表示。
-
-### 編集モード
-
-「✏️ 編集」ボタンで編集モードに切り替え:
-- 全ウィジェットにヘッダーバー（ドラッグハンドル ☰、ウィジェット名、リサイズ ↔、削除 ✕）を表示
-- スクロールエリア右側にウィジェットパレットパネル（WidgetPalettePanel）を表示。未配置ウィジェットをカード形式で一覧表示し、ドラッグ&ドロップでグリッドの任意の位置に追加
-- ウィジェット削除時にパレットが自動更新され、削除されたウィジェットが再びパレットに表示
-- 「✓ 完了」ボタンで編集モードを終了し、レイアウトを保存
-
-### DashboardLayoutService
-
-Qt非依存の純粋ロジッククラス。`WIDGET_REGISTRY`（ClassVar）に全ウィジェットのメタデータを保持:
-- `get_layout()`: 保存済みレイアウト取得（未保存時はデフォルト）
-- `save_layout()`: settings.jsonに保存
-- `get_available_widgets()`: 未配置ウィジェット一覧
-- `reorder()` / `add_widget()` / `remove_widget()` / `resize_widget()`: レイアウト操作（イミュータブル、コピーを返す）
-
-## 書籍管理機能
-
-学習に関連する書籍を登録し、読書の進捗と感想を蓄積する。
-
-### 概要
-
-- **書籍登録**: 書籍名を入力して登録。ステータスは未読→読書中→読了と遷移
-- **書籍タスク管理**: ガントチャートの読書タブで書籍ごとにタスクを作成・進捗管理。書籍タスクは`goal_id = BOOK_GANTT_GOAL_ID ("__books__")`で識別
-- **進捗自動同期**: 書籍に紐づくタスクの進捗率平均→書籍progress。進捗からstatus自動決定（0%→未読, 1-99%→読書中, 100%→読了）
-- **タスク紐付け**: タスクダイアログで関連書籍を選択可能
-- **読了レビュー**: 読了時にBookReviewDialogで要約・感想・読了日を入力
-- **ダッシュボード表示**: BookshelfWidgetで登録数・読了数・最近の読了書籍を表示
-
-### データ設計
-
-Bookモデルにレビュー情報（summary, impressions）を含む1モデルアプローチを採用。
-各書籍に読了記録は1つのため、別モデルへの分離は不要。
-書籍タスクは通常のTaskモデルを使用し、`goal_id = "__books__"`と`book_id = 書籍ID`で紐付け。
-
-### BookService
-
-- `create_book()`: 書籍登録
-- `update_status()`: ステータス変更
-- `complete_book()`: 読了記録（ステータスCOMPLETED + summary + impressions + completed_date）
-- `delete_book()`: 削除時、書籍タスク（goal_id=="__books__"）は完全削除、参照タスクはbook_idクリア
-- `get_bookshelf_data()`: ダッシュボード用集計データ（最近読了5件、各種カウント）
-
-### BookGanttService
-
-- `get_all_book_tasks()`: 全書籍タスク取得（goal_id == BOOK_GANTT_GOAL_ID）
-- `sync_book_progress()`: タスク進捗平均→書籍progress/status/日付を同期
-- `books_to_tasks()`: Book→仮想Task変換（後方互換）
-
-### 画面構成
-
-- **GanttPage**: 統合セレクタで「すべてのタスク」（目標+書籍）、「すべての書籍」、個別目標、個別書籍を選択。「+ タスク追加」クリック時に目標/読書の選択ダイアログを表示
-- **BookPage**: サイドバーの「📚 書籍」タブから独立ページとしてアクセス。書籍の追加・ステータス変更・読了レビュー・削除を管理
-- **TaskDialog**: 通常モードで関連書籍選択コンボボックス（なし + 登録書籍一覧）。書籍タスクモード（book_task_mode=True）で必須書籍セレクタ表示
-- **DashboardPage**: BookshelfWidgetで本棚情報を表示
-
-## 将来の拡張
-
-サイドバーナビゲーション構造により、以下の機能を容易に追加可能:
-
-- エクスポート/インポート機能
-- リマインダー機能（定時通知）
-- ダッシュボードウィジェットの追加（目標サマリー、学習カレンダー等）
+```
+src/study_python/
+├── __init__.py              # バージョン定義
+├── main.py                  # エントリポイント
+├── calculator.py            # サンプルユーティリティ
+├── logging_config.py        # ログ設定
+│
+├── models/                  # データモデル（5モデル + 7列挙型）
+│   ├── __init__.py
+│   ├── goal.py
+│   ├── book.py
+│   ├── task.py
+│   ├── study_log.py
+│   └── notification.py
+│
+├── repositories/            # データ永続化（1共通 + 5Repository）
+│   ├── __init__.py
+│   ├── json_storage.py
+│   ├── goal_repository.py
+│   ├── book_repository.py
+│   ├── task_repository.py
+│   ├── study_log_repository.py
+│   └── notification_repository.py
+│
+├── services/                # ビジネスロジック（7ドメイン + 3計算 + 3基盤）
+│   ├── __init__.py
+│   ├── goal_service.py
+│   ├── task_service.py
+│   ├── study_log_service.py
+│   ├── book_service.py
+│   ├── book_gantt_service.py
+│   ├── notification_service.py
+│   ├── data_export_service.py
+│   ├── gantt_calculator.py
+│   ├── study_stats_calculator.py
+│   ├── motivation_calculator.py
+│   ├── dashboard_layout_service.py
+│   └── holiday_service.py
+│
+└── gui/                     # GUI層
+    ├── __init__.py
+    ├── main_window.py       # メインウィンドウ
+    │
+    ├── theme/               # テーマ管理
+    │   ├── __init__.py
+    │   └── theme_manager.py
+    │
+    ├── pages/               # ページ（6ページ）
+    │   ├── __init__.py
+    │   ├── dashboard_page.py
+    │   ├── goal_page.py
+    │   ├── gantt_page.py
+    │   ├── book_page.py
+    │   ├── stats_page.py
+    │   └── settings_page.py
+    │
+    ├── dialogs/             # ダイアログ（7ダイアログ + 1ロジック）
+    │   ├── __init__.py
+    │   ├── goal_dialog.py
+    │   ├── task_dialog.py
+    │   ├── study_log_dialog.py
+    │   ├── book_management_dialog.py
+    │   ├── book_review_dialog.py
+    │   ├── book_schedule_dialog.py
+    │   ├── notification_detail_dialog.py
+    │   └── task_study_log_logic.py
+    │
+    └── widgets/             # 再利用可能ウィジェット（20+）
+        ├── __init__.py
+        ├── header_bar.py
+        ├── navigation_drawer.py
+        ├── sidebar.py
+        ├── today_study_banner.py
+        ├── daily_activity_chart.py
+        ├── activity_chart_section.py
+        ├── gantt_chart.py
+        ├── bookshelf_widget.py
+        ├── study_log_table.py
+        ├── goal_stats_section.py
+        ├── personal_record_card.py
+        ├── consistency_card.py
+        ├── milestone_button.py
+        ├── milestone_popup.py
+        ├── notification_button.py
+        ├── notification_popup.py
+        ├── dashboard_widget_frame.py
+        ├── widget_palette_panel.py
+        └── japanese_calendar_widget.py
+```

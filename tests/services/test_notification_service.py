@@ -240,3 +240,120 @@ class TestSystemNotifications:
         )
         service = NotificationService(repo, system_notifications_path=sys_path)
         assert service.load_system_notifications() == []
+
+
+class TestNotificationsEnabled:
+    """通知有効/無効設定のテスト."""
+
+    def test_default_enabled(self, repo: NotificationRepository):
+        """デフォルトで通知は有効."""
+        service = NotificationService(repo)
+        assert service.notifications_enabled is True
+
+    def test_enabled_without_settings_path(self, repo: NotificationRepository):
+        """settings_path=Noneの場合は常にTrue."""
+        service = NotificationService(repo, settings_path=None)
+        assert service.notifications_enabled is True
+
+    def test_enabled_no_settings_file(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """設定ファイルが存在しない場合はTrue."""
+        service = NotificationService(repo, settings_path=tmp_path / "settings.json")
+        assert service.notifications_enabled is True
+
+    def test_read_enabled_from_settings(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """設定ファイルからTrue読み込み."""
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text(
+            json.dumps({"notifications_enabled": True}), encoding="utf-8"
+        )
+        service = NotificationService(repo, settings_path=settings_path)
+        assert service.notifications_enabled is True
+
+    def test_read_disabled_from_settings(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """設定ファイルからFalse読み込み."""
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text(
+            json.dumps({"notifications_enabled": False}), encoding="utf-8"
+        )
+        service = NotificationService(repo, settings_path=settings_path)
+        assert service.notifications_enabled is False
+
+    def test_set_notifications_enabled_true(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """通知を有効に設定できる."""
+        settings_path = tmp_path / "settings.json"
+        service = NotificationService(repo, settings_path=settings_path)
+        service.set_notifications_enabled(True)
+
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert data["notifications_enabled"] is True
+
+    def test_set_notifications_enabled_false(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """通知を無効に設定できる."""
+        settings_path = tmp_path / "settings.json"
+        service = NotificationService(repo, settings_path=settings_path)
+        service.set_notifications_enabled(False)
+        assert service.notifications_enabled is False
+
+    def test_set_enabled_no_settings_path(self, repo: NotificationRepository):
+        """settings_path=Noneの場合はset_notifications_enabledがエラーにならない."""
+        service = NotificationService(repo, settings_path=None)
+        service.set_notifications_enabled(False)
+        # エラーなし、値は変わらない
+        assert service.notifications_enabled is True
+
+    def test_preserves_other_settings(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """他の設定値を保持する."""
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text(json.dumps({"theme": "dark"}), encoding="utf-8")
+        service = NotificationService(repo, settings_path=settings_path)
+        service.set_notifications_enabled(False)
+
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert data["theme"] == "dark"
+        assert data["notifications_enabled"] is False
+
+    def test_invalid_json_defaults_to_true(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """不正JSONの場合はTrueを返す."""
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text("invalid json", encoding="utf-8")
+        service = NotificationService(repo, settings_path=settings_path)
+        assert service.notifications_enabled is True
+
+    def test_achievement_skipped_when_disabled(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """通知無効時にachievement通知がスキップされる."""
+        settings_path = tmp_path / "settings.json"
+        service = NotificationService(repo, settings_path=settings_path)
+        service.set_notifications_enabled(False)
+
+        data = MilestoneData(total_hours=100.0, study_days=50, current_streak=30)
+        created = service.check_and_create_achievement_notifications(data)
+        assert len(created) == 0
+
+    def test_achievement_works_when_enabled(
+        self, tmp_path: Path, repo: NotificationRepository
+    ):
+        """通知有効時にachievement通知が正常に生成される."""
+        settings_path = tmp_path / "settings.json"
+        service = NotificationService(repo, settings_path=settings_path)
+        service.set_notifications_enabled(True)
+
+        data = MilestoneData(total_hours=2.0, study_days=0, current_streak=0)
+        created = service.check_and_create_achievement_notifications(data)
+        assert len(created) == 1
+        assert "累計1時間達成！" in created[0].title

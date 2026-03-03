@@ -87,9 +87,7 @@ class NotificationDetailDialog(QDialog):
 
         # ヘッダー（アイコンとタイトル）
         header_layout = QHBoxLayout()
-        icon = _TYPE_ICONS.get(
-            self._notification.notification_type, "\U0001f514"
-        )
+        icon = _TYPE_ICONS.get(self._notification.notification_type, "\U0001f514")
         self._icon_label = QLabel(icon)
         self._icon_label.setStyleSheet("font-size: 20px;")
         self._icon_label.setFixedWidth(28)
@@ -105,9 +103,7 @@ class NotificationDetailDialog(QDialog):
         self._add_separator(layout, border)
 
         # 種別
-        type_label_text = _TYPE_LABELS.get(
-            self._notification.notification_type, "不明"
-        )
+        type_label_text = _TYPE_LABELS.get(self._notification.notification_type, "不明")
         self._type_label = self._add_meta_row(
             layout, "種別", type_label_text, text_muted, text_color
         )
